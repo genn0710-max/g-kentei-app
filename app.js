@@ -98,6 +98,11 @@ const elements = {
   btnExamPrev: document.getElementById('btn-exam-prev'),
   btnExamNext: document.getElementById('btn-exam-next'),
   examPaletteGrid: document.getElementById('exam-palette-grid'),
+  btnTogglePalette: document.getElementById('btn-toggle-palette'),
+  paletteCollapsibleContent: document.getElementById('palette-collapsible-content'),
+  paletteChevron: document.getElementById('palette-chevron'),
+  paletteAnsweredCount: document.getElementById('palette-answered-count'),
+  paletteCountLabel: document.getElementById('palette-count-label'),
   resultScorePercent: document.getElementById('result-score-percent'),
   resultScoreFraction: document.getElementById('result-score-fraction'),
   resultVerdict: document.getElementById('result-verdict'),
@@ -569,6 +574,16 @@ function updatePaceDisplay() {
 
 function renderExamPalette() {
   elements.examPaletteGrid.innerHTML = '';
+  const total = state.exam.questions.length;
+  const answeredCount = Object.keys(state.exam.answers).length;
+
+  if (elements.paletteCountLabel) {
+    elements.paletteCountLabel.textContent = `${total}問`;
+  }
+  if (elements.paletteAnsweredCount) {
+    elements.paletteAnsweredCount.textContent = `${answeredCount}/${total}回答`;
+  }
+
   state.exam.questions.forEach((q, idx) => {
     const btn = document.createElement('button');
     btn.className = 'palette-btn';
@@ -582,6 +597,12 @@ function renderExamPalette() {
       state.exam.currentIndex = idx;
       renderCurrentExamQuestion();
       renderExamPalette();
+      if (window.innerWidth <= 768) {
+        const qCard = document.querySelector('.question-card');
+        if (qCard) {
+          qCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }
     });
 
     elements.examPaletteGrid.appendChild(btn);
@@ -1108,12 +1129,25 @@ function setupEventListeners() {
     elements.examStartView.classList.remove('hidden');
   });
 
+  if (elements.btnTogglePalette && elements.paletteCollapsibleContent) {
+    elements.btnTogglePalette.addEventListener('click', () => {
+      const isOpen = elements.paletteCollapsibleContent.classList.toggle('open');
+      if (elements.paletteChevron) {
+        elements.paletteChevron.textContent = isOpen ? '▲' : '▼';
+      }
+    });
+  }
+
   elements.btnExamPrev.addEventListener('click', () => {
     if (state.exam.currentIndex > 0) {
       stopSpeaking();
       state.exam.currentIndex--;
       renderCurrentExamQuestion();
       renderExamPalette();
+      if (window.innerWidth <= 768) {
+        const qCard = document.querySelector('.question-card');
+        if (qCard) qCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
     }
   });
 
@@ -1123,6 +1157,10 @@ function setupEventListeners() {
       state.exam.currentIndex++;
       renderCurrentExamQuestion();
       renderExamPalette();
+      if (window.innerWidth <= 768) {
+        const qCard = document.querySelector('.question-card');
+        if (qCard) qCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
     }
   });
 

@@ -164,6 +164,14 @@ body {
   border-bottom-color: var(--primary);
 }
 
+.tab-label-full {
+  display: inline;
+}
+
+.tab-label-short {
+  display: none;
+}
+
 /* メインレイアウト */
 .app-main {
   max-width: 1200px;
@@ -325,11 +333,28 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 16px;
   background: #ffffff;
   padding: 1rem 1.5rem;
   border-radius: var(--radius);
   border: 1px solid var(--border);
   margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.exam-bar-row-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex: 1 1 auto;
+}
+
+.exam-bar-row-timers {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
 }
 
 .category-badge {
@@ -513,10 +538,50 @@ body {
 }
 
 /* 問題パレット */
-.nav-palette-card h4 {
+.palette-header-toggle {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  margin-bottom: 12px;
+  user-select: none;
+}
+
+.palette-title-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.palette-title-group h4 {
   font-size: 0.95rem;
   color: #475569;
-  margin-bottom: 12px;
+  margin: 0;
+}
+
+.palette-toggle-state {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.palette-summary-badge {
+  background: #e0e7ff;
+  color: #3730a3;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 9999px;
+}
+
+.palette-chevron {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  transition: transform 0.2s ease;
+}
+
+.palette-collapsible-body {
+  display: block;
 }
 
 .palette-legend {
@@ -1118,28 +1183,493 @@ body {
   transition: all 0.3s ease;
 }
 
-/* レスポンシブ */
+/* レスポンシブ最適化 (スマホ・タブレット完全対応) */
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 @media (max-width: 768px) {
+  /* ヘッダー・ナビゲーション */
+  .app-header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: #ffffff;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  }
+
+  .header-container {
+    padding: 0.6rem 0.85rem;
+    gap: 8px;
+  }
+
+  .brand h1 {
+    font-size: 1rem;
+    white-space: nowrap;
+  }
+
+  .logo-icon {
+    width: 32px;
+    height: 32px;
+    font-size: 0.8rem;
+  }
+
+  .badge-tag {
+    display: none;
+  }
+
+  .header-stats {
+    gap: 6px;
+  }
+
+  .stat-pill {
+    padding: 3px 8px;
+    font-size: 0.75rem;
+  }
+
+  .header-stats .port-pill {
+    display: none;
+  }
+
+  .app-nav {
+    padding: 0 0.5rem;
+    gap: 4px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .app-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .nav-tab {
+    padding: 9px 8px;
+    font-size: 0.82rem;
+    flex: 1 0 auto;
+    justify-content: center;
+    gap: 5px;
+    white-space: nowrap;
+    border-bottom-width: 3px;
+  }
+
+  .nav-tab .icon {
+    font-size: 1rem;
+  }
+
+  .tab-label-full {
+    display: none;
+  }
+
+  .tab-label-short {
+    display: inline;
+    font-weight: 700;
+  }
+
+  /* メインレイアウト */
+  .app-main {
+    margin: 0.85rem auto 5.5rem auto;
+    padding: 0 0.75rem;
+  }
+
+  .card {
+    padding: 1.15rem 0.9rem;
+    border-radius: 12px;
+    margin-bottom: 1rem;
+  }
+
+  .hero-card {
+    padding: 1.5rem 1rem;
+    margin: 0.5rem auto;
+  }
+
+  .hero-card h2 {
+    font-size: 1.25rem;
+  }
+
+  .subtitle {
+    font-size: 0.85rem;
+  }
+
+  /* 模試レイアウト */
   .exam-layout {
     grid-template-columns: 1fr;
+    gap: 14px;
   }
+
+  /* 模試トップバー (2行構成) */
+  .exam-top-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding: 0.85rem 0.9rem;
+    border-radius: 12px;
+    margin-bottom: 12px;
+  }
+
+  .exam-bar-row-main {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    gap: 8px;
+  }
+
+  .progress-info {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  #exam-q-progress {
+    font-size: 0.95rem;
+    font-weight: 700;
+    white-space: nowrap;
+    color: #0f172a;
+  }
+
+  .category-badge {
+    margin-left: 0;
+    font-size: 0.72rem;
+    padding: 2px 7px;
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex-shrink: 1;
+  }
+
+  .exam-controls-top {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
+  .exam-controls-top .btn-sm {
+    padding: 5px 8px;
+    font-size: 0.8rem;
+    border-radius: 6px;
+  }
+
+  .exam-bar-row-timers {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    gap: 8px;
+  }
+
+  .per-question-timer-box {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 4px 8px;
+    border-radius: 6px;
+  }
+
+  .pace-label-row {
+    font-size: 0.72rem;
+    margin-bottom: 2px;
+  }
+
+  .pace-label-row strong {
+    font-size: 0.85rem;
+  }
+
+  .timer-box {
+    flex: 0 0 auto;
+    padding: 4px 10px;
+    gap: 6px;
+    border-radius: 6px;
+  }
+
+  .total-timer-label {
+    display: none;
+  }
+
+  #exam-timer-text {
+    font-size: 0.95rem;
+    font-weight: 700;
+  }
+
+  /* 問題カード & 選択肢 */
+  .question-card {
+    padding: 1.15rem 0.9rem;
+  }
+
+  .question-title {
+    font-size: 1.02rem;
+    line-height: 1.55;
+    margin-bottom: 1.15rem;
+    word-break: break-word;
+  }
+
+  .choices-list {
+    gap: 10px;
+    margin-bottom: 1.25rem;
+  }
+
+  .choice-item {
+    padding: 12px 14px;
+    gap: 12px;
+    min-height: 52px;
+    border-radius: 10px;
+    -webkit-tap-highlight-color: rgba(37, 99, 235, 0.08);
+  }
+
+  .choice-item:active {
+    background-color: #eff6ff;
+    border-color: var(--primary);
+  }
+
+  .choice-badge {
+    width: 26px;
+    height: 26px;
+    font-size: 0.82rem;
+    flex-shrink: 0;
+  }
+
+  .choice-text {
+    font-size: 0.95rem;
+    line-height: 1.5;
+  }
+
+  .question-nav-buttons {
+    padding-top: 1rem;
+    gap: 10px;
+  }
+
+  .btn-nav-action {
+    flex: 1;
+    min-height: 48px;
+    font-size: 0.98rem;
+    font-weight: 700;
+    border-radius: 10px;
+    justify-content: center;
+  }
+
+  /* 問題パレット (スマホでは折りたたみ式アコーディオン) */
+  .nav-palette-card {
+    padding: 0.9rem;
+  }
+
+  .palette-header-toggle {
+    padding: 4px 0;
+  }
+
+  .palette-chevron {
+    display: inline-block;
+  }
+
+  .palette-collapsible-body {
+    display: none;
+    margin-top: 12px;
+  }
+
+  .palette-collapsible-body.open {
+    display: block;
+    animation: slideDown 0.2s ease-out;
+  }
+
+  .palette-grid {
+    grid-template-columns: repeat(8, 1fr);
+    gap: 6px;
+    max-height: 240px;
+    overflow-y: auto;
+    padding: 4px 2px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .palette-btn {
+    aspect-ratio: 1;
+    font-size: 0.78rem;
+    min-height: 34px;
+    border-radius: 6px;
+  }
+
+  /* 音声コントロールバー (スマホ常設フローティング) */
+  .audio-bar {
+    bottom: 12px;
+    left: 12px;
+    right: 12px;
+    width: auto;
+    max-width: calc(100vw - 24px);
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  }
+
+  .audio-bar-inner {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    gap: 8px;
+  }
+
+  .audio-info {
+    font-size: 0.8rem;
+    max-width: 140px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .audio-controls {
+    gap: 6px;
+  }
+
+  .btn-audio-action {
+    width: 32px;
+    height: 32px;
+    font-size: 0.85rem;
+  }
+
+  .audio-speed-wrapper {
+    font-size: 0.75rem;
+  }
+
+  .audio-speed-select {
+    font-size: 0.75rem;
+    padding: 2px 4px;
+  }
+
+  /* 結果画面 */
+  .result-header {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 16px;
+    padding-bottom: 1.5rem;
+  }
+
+  .score-circle {
+    width: 115px;
+    height: 115px;
+  }
+
+  .score-number {
+    font-size: 2.1rem;
+  }
+
+  .result-actions {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .result-actions .btn {
+    width: 100%;
+    min-height: 46px;
+  }
+
+  .review-header-flex {
+    flex-direction: column;
+    gap: 10px;
+    align-items: stretch;
+  }
+
+  .review-header-flex .btn {
+    width: 100%;
+  }
+
+  /* ドリル・用語集・管理タブ */
+  .drill-header {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .category-selection-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
   .terms-top-bar {
     flex-direction: column;
     align-items: stretch;
+    gap: 12px;
   }
+
   .terms-search-box {
+    flex-direction: column;
     width: 100%;
+    gap: 8px;
   }
+
   .form-row {
     flex-direction: column;
     gap: 0;
   }
-  .result-header {
+
+  .table-header-row {
     flex-direction: column;
-    text-align: center;
+    align-items: stretch;
+    gap: 10px;
   }
-  .audio-bar-inner {
-    flex-direction: column;
-    gap: 8px;
+
+  .table-actions {
+    flex-wrap: wrap;
+    width: 100%;
+    gap: 6px;
+  }
+
+  .table-actions input {
+    flex: 1 1 100%;
+  }
+
+  .choice-input-row {
+    gap: 6px;
+    align-items: center;
+  }
+
+  .choice-input-row input[type="text"] {
+    font-size: 0.9rem;
+  }
+
+  /* モーダル */
+  .modal-card {
+    width: 92%;
+    margin: 10px auto;
+    max-height: 85vh;
+  }
+
+  /* トースト */
+  .toast {
+    bottom: 74px;
+    right: 12px;
+    left: 12px;
+    text-align: center;
+    padding: 10px 16px;
+    font-size: 0.88rem;
+  }
+}
+
+/* 超小型スマホ (375px以下, iPhone SEなど) 特化調整 */
+@media (max-width: 400px) {
+  .header-stats .stat-pill:not(:first-child) {
+    display: none;
+  }
+
+  .exam-controls-top .btn-text {
+    display: none;
+  }
+
+  .palette-grid {
+    grid-template-columns: repeat(6, 1fr);
+  }
+
+  .nav-tab {
+    padding: 8px 4px;
+    font-size: 0.78rem;
+  }
+
+  .btn-nav-action {
+    font-size: 0.9rem;
+    padding: 10px 6px;
+  }
+
+  .category-badge {
+    max-width: 90px;
   }
 }

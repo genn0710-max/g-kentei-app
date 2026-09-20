@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>G検定 完全対策システム (JDLAシラバス準拠・スタンドアローン)</title>
   <link rel="stylesheet" href="style.css">
   <link rel="manifest" href="manifest.json">
@@ -35,16 +35,24 @@
     <!-- タブナビゲーション -->
     <nav class="app-nav">
       <button class="nav-tab active" data-tab="exam-tab">
-        <span class="icon">⏱️</span> 本番形式 模擬試験
+        <span class="icon">⏱️</span>
+        <span class="tab-label-full">本番形式 模擬試験</span>
+        <span class="tab-label-short">模試</span>
       </button>
       <button class="nav-tab" data-tab="drill-tab">
-        <span class="icon">📚</span> 分野別ドリル
+        <span class="icon">📚</span>
+        <span class="tab-label-full">分野別ドリル</span>
+        <span class="tab-label-short">ドリル</span>
       </button>
       <button class="nav-tab" data-tab="terms-tab">
-        <span class="icon">📖</span> 重要用語集
+        <span class="icon">📖</span>
+        <span class="tab-label-full">重要用語集</span>
+        <span class="tab-label-short">用語集</span>
       </button>
       <button class="nav-tab" data-tab="admin-tab">
-        <span class="icon">✍️</span> 問題の手動登録・管理
+        <span class="icon">✍️</span>
+        <span class="tab-label-full">問題の手動登録・管理</span>
+        <span class="tab-label-short">管理</span>
       </button>
     </nav>
   </header>
@@ -116,15 +124,26 @@
       <!-- 模試解答中ビュー -->
       <div id="exam-play-view" class="hidden">
         <div class="exam-top-bar">
-          <div class="progress-info">
-            <span id="exam-q-progress">第 1 問 / 200 問</span>
-            <span class="category-badge" id="exam-current-category">分野名</span>
+          <div class="exam-bar-row-main">
+            <div class="progress-info">
+              <span id="exam-q-progress">第 1 問 / 200 問</span>
+              <span class="category-badge" id="exam-current-category">分野名</span>
+            </div>
+            <div class="exam-controls-top">
+              <button id="btn-speak-exam-q" class="btn btn-outline btn-sm" title="問題文と選択肢を音声で読み上げ">
+                🔊 <span class="btn-text">読み上げ</span>
+              </button>
+              <button id="btn-flag-toggle" class="btn btn-outline btn-sm" title="見直しチェック">
+                <span id="flag-icon">🚩</span> <span class="btn-text">見直し</span>
+              </button>
+              <button id="btn-finish-exam" class="btn btn-danger btn-sm">採点・終了</button>
+            </div>
           </div>
-          <div class="timer-flex-group">
+          <div class="exam-bar-row-timers timer-flex-group">
             <!-- 1問40秒ペースタイマー -->
             <div class="per-question-timer-box" id="per-question-timer-box">
               <div class="pace-label-row">
-                <span class="pace-title">1問40秒ペース:</span>
+                <span class="pace-title">40秒ペース:</span>
                 <strong id="pace-seconds-text">40秒</strong>
               </div>
               <div class="pace-progress-track">
@@ -135,19 +154,10 @@
             <div class="timer-box" id="exam-timer-box">
               <span class="timer-icon">⏳</span>
               <div class="total-timer-col">
-                <span class="total-timer-label">全体残り時間</span>
+                <span class="total-timer-label">残り時間</span>
                 <span id="exam-timer-text">02:00:00</span>
               </div>
             </div>
-          </div>
-          <div class="exam-controls-top">
-            <button id="btn-speak-exam-q" class="btn btn-outline btn-sm" title="問題文と選択肢を音声で読み上げ">
-              🔊 読み上げ
-            </button>
-            <button id="btn-flag-toggle" class="btn btn-outline btn-sm">
-              <span id="flag-icon">🚩</span> 見直しチェック
-            </button>
-            <button id="btn-finish-exam" class="btn btn-danger btn-sm">試験終了・採点</button>
           </div>
         </div>
 
@@ -161,21 +171,32 @@
               <!-- 選択肢が動的に挿入されます -->
             </div>
             <div class="question-nav-buttons">
-              <button id="btn-exam-prev" class="btn btn-secondary">◀ 前の問題</button>
-              <button id="btn-exam-next" class="btn btn-primary">次の問題 ▶</button>
+              <button id="btn-exam-prev" class="btn btn-secondary btn-nav-action">◀ 前の問題</button>
+              <button id="btn-exam-next" class="btn btn-primary btn-nav-action">次の問題 ▶</button>
             </div>
           </div>
 
           <!-- 右側問題ナビゲーションパレット -->
           <div class="card nav-palette-card">
-            <h4>問題パレット</h4>
-            <div class="palette-legend">
-              <span><span class="dot dot-unanswered"></span> 未回答</span>
-              <span><span class="dot dot-answered"></span> 解答済</span>
-              <span><span class="dot dot-flagged"></span> 要見直し</span>
+            <div class="palette-header-toggle" id="btn-toggle-palette" role="button" tabindex="0">
+              <div class="palette-title-group">
+                <span class="palette-icon">🔢</span>
+                <h4>問題パレット (<span id="palette-count-label">200問</span>)</h4>
+              </div>
+              <div class="palette-toggle-state">
+                <span class="palette-summary-badge" id="palette-answered-count">0/200回答</span>
+                <span class="palette-chevron" id="palette-chevron">▼</span>
+              </div>
             </div>
-            <div class="palette-grid" id="exam-palette-grid">
-              <!-- 1, 2, 3... ボタン -->
+            <div class="palette-collapsible-body" id="palette-collapsible-content">
+              <div class="palette-legend">
+                <span><span class="dot dot-unanswered"></span> 未回答</span>
+                <span><span class="dot dot-answered"></span> 解答済</span>
+                <span><span class="dot dot-flagged"></span> 要見直し</span>
+              </div>
+              <div class="palette-grid" id="exam-palette-grid">
+                <!-- 1, 2, 3... ボタン -->
+              </div>
             </div>
           </div>
         </div>
