@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e3a8a"/>
+      <stop offset="100%" stop-color="#2563eb"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#60a5fa"/>
+      <stop offset="100%" stop-color="#93c5fd"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="110" fill="url(#bg)"/>
+  <!-- ネットワークライン -->
+  <line x1="140" y1="180" x2="256" y2="120" stroke="rgba(255,255,255,0.2)" stroke-width="4"/>
+  <line x1="372" y1="180" x2="256" y2="120" stroke="rgba(255,255,255,0.2)" stroke-width="4"/>
+  <line x1="140" y1="332" x2="256" y2="392" stroke="rgba(255,255,255,0.2)" stroke-width="4"/>
+  <line x1="372" y1="332" x2="256" y2="392" stroke="rgba(255,255,255,0.2)" stroke-width="4"/>
+  <!-- ノード -->
+  <circle cx="256" cy="120" r="16" fill="url(#glow)"/>
+  <circle cx="140" cy="180" r="12" fill="url(#glow)"/>
+  <circle cx="372" cy="180" r="12" fill="url(#glow)"/>
+  <circle cx="140" cy="332" r="12" fill="url(#glow)"/>
+  <circle cx="372" cy="332" r="12" fill="url(#glow)"/>
+  <circle cx="256" cy="392" r="16" fill="url(#glow)"/>
+  <!-- G文字 -->
+  <text x="256" y="325" font-family="-apple-system, BlinkMacSystemFont, 'Inter', sans-serif" font-weight="900" font-size="210" fill="#ffffff" text-anchor="middle">G</text>
+</svg>
