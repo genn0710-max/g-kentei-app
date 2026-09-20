@@ -93,6 +93,7 @@ const elements = {
   btnSpeakExamQ: document.getElementById('btn-speak-exam-q'),
   btnFlagToggle: document.getElementById('btn-flag-toggle'),
   btnFinishExam: document.getElementById('btn-finish-exam'),
+  btnAbortExam: document.getElementById('btn-abort-exam'),
   examQuestionText: document.getElementById('exam-question-text'),
   examChoicesContainer: document.getElementById('exam-choices-container'),
   btnExamPrev: document.getElementById('btn-exam-prev'),
@@ -507,6 +508,7 @@ function startExam() {
   elements.examStartView.classList.add('hidden');
   elements.examResultView.classList.add('hidden');
   elements.examPlayView.classList.remove('hidden');
+  document.body.classList.add('in-exam');
 
   if (totalSeconds > 0) {
     elements.examTimerBox.classList.remove('hidden');
@@ -710,6 +712,7 @@ function finishExam() {
 
   elements.examPlayView.classList.add('hidden');
   elements.examResultView.classList.remove('hidden');
+  document.body.classList.remove('in-exam');
 }
 
 function renderReviewList(filter = 'all') {
@@ -1183,6 +1186,20 @@ function setupEventListeners() {
     }
     finishExam();
   });
+
+  if (elements.btnAbortExam) {
+    elements.btnAbortExam.addEventListener('click', () => {
+      if (confirm('模擬試験を中断して最初の画面に戻りますか？')) {
+        stopSpeaking();
+        if (state.exam.timerInterval) clearInterval(state.exam.timerInterval);
+        if (state.exam.paceInterval) clearInterval(state.exam.paceInterval);
+        document.body.classList.remove('in-exam');
+        elements.examPlayView.classList.add('hidden');
+        elements.examResultView.classList.add('hidden');
+        elements.examStartView.classList.remove('hidden');
+      }
+    });
+  }
 
   elements.btnFilterMistakes.addEventListener('click', () => renderReviewList('mistakes'));
   elements.btnShowAllReviews.addEventListener('click', () => renderReviewList('all'));

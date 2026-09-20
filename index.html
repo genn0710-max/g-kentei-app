@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>G検定 完全対策システム (JDLAシラバス準拠・スタンドアローン)</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=3.2">
   <link rel="manifest" href="manifest.json">
   <link rel="icon" type="image/png" href="icon.png">
   <link rel="apple-touch-icon" href="icon.png">
@@ -137,6 +137,7 @@
                 <span id="flag-icon">🚩</span> <span class="btn-text">見直し</span>
               </button>
               <button id="btn-finish-exam" class="btn btn-danger btn-sm">採点・終了</button>
+              <button id="btn-abort-exam" class="btn btn-outline btn-sm" title="中断して戻る">✕ 中断</button>
             </div>
           </div>
           <div class="exam-bar-row-timers timer-flex-group">
@@ -432,6 +433,6 @@
   <!-- トースト通知 -->
   <div id="toast" class="toast hidden"></div>
 
-  <script src="app.js"></script>
+  <script src="app.js?v=3.2"></script>
 </body>
 </html>

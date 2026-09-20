@@ -1190,29 +1190,39 @@ body {
 }
 
 @media (max-width: 768px) {
-  /* ヘッダー・ナビゲーション */
+  /* 模試解答中はヘッダー（インデックス）を完全非表示にして、画面の100%を問題文と選択肢に割り当てる */
+  body.in-exam .app-header {
+    display: none !important;
+  }
+
+  body.in-exam .app-main {
+    margin: 4px auto 60px auto !important;
+    padding: 0 6px !important;
+  }
+
+  /* ヘッダー・ナビゲーション (スマホではstickyを解除してスクロール時に画面を圧迫しない) */
   .app-header {
-    position: sticky;
-    top: 0;
-    z-index: 100;
+    position: relative !important;
+    top: auto !important;
+    z-index: 10;
     background: #ffffff;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
   }
 
   .header-container {
-    padding: 0.6rem 0.85rem;
-    gap: 8px;
+    padding: 0.5rem 0.75rem;
+    gap: 6px;
   }
 
   .brand h1 {
-    font-size: 1rem;
+    font-size: 0.92rem;
     white-space: nowrap;
   }
 
   .logo-icon {
-    width: 32px;
-    height: 32px;
-    font-size: 0.8rem;
+    width: 28px;
+    height: 28px;
+    font-size: 0.75rem;
   }
 
   .badge-tag {
@@ -1220,21 +1230,22 @@ body {
   }
 
   .header-stats {
-    gap: 6px;
+    gap: 4px;
   }
 
   .stat-pill {
-    padding: 3px 8px;
-    font-size: 0.75rem;
+    padding: 2px 6px;
+    font-size: 0.72rem;
   }
 
-  .header-stats .port-pill {
+  .header-stats .port-pill,
+  .header-stats .stat-pill:nth-child(2) {
     display: none;
   }
 
   .app-nav {
-    padding: 0 0.5rem;
-    gap: 4px;
+    padding: 0 0.25rem;
+    gap: 2px;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
@@ -1245,17 +1256,17 @@ body {
   }
 
   .nav-tab {
-    padding: 9px 8px;
-    font-size: 0.82rem;
+    padding: 8px 6px;
+    font-size: 0.8rem;
     flex: 1 0 auto;
     justify-content: center;
-    gap: 5px;
+    gap: 4px;
     white-space: nowrap;
-    border-bottom-width: 3px;
+    border-bottom-width: 2.5px;
   }
 
   .nav-tab .icon {
-    font-size: 1rem;
+    font-size: 0.95rem;
   }
 
   .tab-label-full {
@@ -1269,43 +1280,65 @@ body {
 
   /* メインレイアウト */
   .app-main {
-    margin: 0.85rem auto 5.5rem auto;
-    padding: 0 0.75rem;
+    margin: 0.5rem auto 5rem auto;
+    padding: 0 0.5rem;
   }
 
   .card {
-    padding: 1.15rem 0.9rem;
-    border-radius: 12px;
-    margin-bottom: 1rem;
+    padding: 0.85rem 0.75rem;
+    border-radius: 10px;
+    margin-bottom: 0.75rem;
   }
 
+  /* スタート画面カード */
   .hero-card {
-    padding: 1.5rem 1rem;
-    margin: 0.5rem auto;
+    padding: 1rem 0.75rem;
+    margin: 0.25rem auto;
   }
 
   .hero-card h2 {
-    font-size: 1.25rem;
+    font-size: 1.15rem;
+    margin-bottom: 4px;
   }
 
-  .subtitle {
+  .hero-card .subtitle {
+    font-size: 0.8rem;
+    margin-bottom: 10px;
+  }
+
+  .exam-settings {
+    margin: 0.75rem 0;
+    gap: 8px;
+  }
+
+  .setting-group {
+    margin-bottom: 8px;
+  }
+
+  .setting-group label {
+    font-size: 0.8rem;
+    margin-bottom: 2px;
+  }
+
+  .setting-group select {
     font-size: 0.85rem;
+    padding: 6px 8px;
   }
 
   /* 模試レイアウト */
   .exam-layout {
     grid-template-columns: 1fr;
-    gap: 14px;
+    gap: 8px;
   }
 
-  /* 模試トップバー (2行構成) */
+  /* 模試トップバー (超スリム設計: 画面上部を圧迫しない) */
   .exam-top-bar {
     flex-direction: column;
     align-items: stretch;
-    gap: 10px;
-    padding: 0.85rem 0.9rem;
-    border-radius: 12px;
-    margin-bottom: 12px;
+    gap: 4px;
+    padding: 6px 8px;
+    border-radius: 8px;
+    margin-bottom: 6px;
   }
 
   .exam-bar-row-main {
@@ -1313,18 +1346,18 @@ body {
     justify-content: space-between;
     align-items: center;
     width: 100%;
-    gap: 8px;
+    gap: 6px;
   }
 
   .progress-info {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 4px;
     min-width: 0;
   }
 
   #exam-q-progress {
-    font-size: 0.95rem;
+    font-size: 0.88rem;
     font-weight: 700;
     white-space: nowrap;
     color: #0f172a;
@@ -1332,9 +1365,9 @@ body {
 
   .category-badge {
     margin-left: 0;
-    font-size: 0.72rem;
-    padding: 2px 7px;
-    max-width: 120px;
+    font-size: 0.68rem;
+    padding: 1px 6px;
+    max-width: 100px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -1343,15 +1376,16 @@ body {
 
   .exam-controls-top {
     display: flex;
-    gap: 6px;
+    gap: 4px;
     align-items: center;
     flex-shrink: 0;
   }
 
   .exam-controls-top .btn-sm {
-    padding: 5px 8px;
-    font-size: 0.8rem;
-    border-radius: 6px;
+    padding: 3px 6px;
+    font-size: 0.75rem;
+    border-radius: 4px;
+    min-height: 28px;
   }
 
   .exam-bar-row-timers {
@@ -1359,30 +1393,34 @@ body {
     justify-content: space-between;
     align-items: center;
     width: 100%;
-    gap: 8px;
+    gap: 6px;
   }
 
   .per-question-timer-box {
     flex: 1 1 auto;
     min-width: 0;
-    padding: 4px 8px;
-    border-radius: 6px;
+    padding: 2px 6px;
+    border-radius: 4px;
   }
 
   .pace-label-row {
-    font-size: 0.72rem;
-    margin-bottom: 2px;
+    font-size: 0.68rem;
+    margin-bottom: 1px;
   }
 
   .pace-label-row strong {
-    font-size: 0.85rem;
+    font-size: 0.78rem;
+  }
+
+  .pace-progress-track {
+    height: 4px;
   }
 
   .timer-box {
     flex: 0 0 auto;
-    padding: 4px 10px;
-    gap: 6px;
-    border-radius: 6px;
+    padding: 2px 8px;
+    gap: 4px;
+    border-radius: 4px;
   }
 
   .total-timer-label {
@@ -1390,32 +1428,34 @@ body {
   }
 
   #exam-timer-text {
-    font-size: 0.95rem;
+    font-size: 0.88rem;
     font-weight: 700;
   }
 
-  /* 問題カード & 選択肢 */
+  /* 問題カード & 選択肢 (超コンパクト設計: 1画面に全選択肢と次へボタンが完全収まる) */
   .question-card {
-    padding: 1.15rem 0.9rem;
+    padding: 8px 10px;
+    margin-bottom: 6px;
+    border-radius: 10px;
   }
 
   .question-title {
-    font-size: 1.02rem;
-    line-height: 1.55;
-    margin-bottom: 1.15rem;
+    font-size: 0.92rem;
+    line-height: 1.42;
+    margin-bottom: 8px;
     word-break: break-word;
   }
 
   .choices-list {
-    gap: 10px;
-    margin-bottom: 1.25rem;
+    gap: 6px;
+    margin-bottom: 8px;
   }
 
   .choice-item {
-    padding: 12px 14px;
-    gap: 12px;
-    min-height: 52px;
-    border-radius: 10px;
+    padding: 7px 10px;
+    gap: 8px;
+    min-height: 42px;
+    border-radius: 8px;
     -webkit-tap-highlight-color: rgba(37, 99, 235, 0.08);
   }
 
@@ -1425,28 +1465,28 @@ body {
   }
 
   .choice-badge {
-    width: 26px;
-    height: 26px;
-    font-size: 0.82rem;
+    width: 22px;
+    height: 22px;
+    font-size: 0.76rem;
     flex-shrink: 0;
   }
 
   .choice-text {
-    font-size: 0.95rem;
-    line-height: 1.5;
+    font-size: 0.88rem;
+    line-height: 1.35;
   }
 
   .question-nav-buttons {
-    padding-top: 1rem;
-    gap: 10px;
+    padding-top: 6px;
+    gap: 8px;
   }
 
   .btn-nav-action {
     flex: 1;
-    min-height: 48px;
-    font-size: 0.98rem;
+    min-height: 40px;
+    font-size: 0.9rem;
     font-weight: 700;
-    border-radius: 10px;
+    border-radius: 8px;
     justify-content: center;
   }
 
