@@ -1,5 +1,5 @@
-// G検定学習システム Service Worker v3.2 (NetworkFirst & 完全オフライン対応)
-const CACHE_NAME = 'gkentei-v3.2';
+// G検定学習システム Service Worker v3.3 (Audio Flow 聞き流し機能追加 & キャッシュ自動更新)
+const CACHE_NAME = 'gkentei-v3.3';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
