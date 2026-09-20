@@ -56,6 +56,7 @@ const state = {
     thinkingTime: true,
     repeat: true,
     speed: 1.0,
+    preventSleep: true, // スリープ・自動消灯防止 (Wake Lock)
     phase: 'idle', // 'idle' | 'question' | 'thinking' | 'explanation' | 'term'
     timerId: null
   },
@@ -153,6 +154,8 @@ const elements = {
   flowCategorySelect: document.getElementById('flow-category-select'),
   flowThinkingToggle: document.getElementById('flow-thinking-toggle'),
   flowRepeatToggle: document.getElementById('flow-repeat-toggle'),
+  flowWakeLockToggle: document.getElementById('flow-wakelock-toggle'),
+  flowWakeLockPill: document.getElementById('flow-wakelock-pill'),
   flowSpeedSelect: document.getElementById('flow-speed-select'),
   flowStatusBadge: document.getElementById('flow-status-badge'),
   flowCounterText: document.getElementById('flow-counter-text'),
@@ -1170,6 +1173,109 @@ window.deleteQuestion = deleteQuestion;
 // ==========================================
 // 6. 各セクション・重要用語 聞き流しモード（Audio Flow）
 // ==========================================
+
+// --- スリープ防止 (Screen Wake Lock) & タイムアウト防止キープアライブ ---
+let wakeLockSentinel = null;
+let silentKeepAliveAudio = null;
+let speechHeartbeatTimer = null;
+
+async function requestScreenWakeLock() {
+  if (!state.audioFlow.preventSleep) return;
+  if ('wakeLock' in navigator) {
+    try {
+      if (!wakeLockSentinel) {
+        wakeLockSentinel = await navigator.wakeLock.request('screen');
+        wakeLockSentinel.addEventListener('release', () => {
+          wakeLockSentinel = null;
+          updateWakeLockUI(false);
+        });
+        updateWakeLockUI(true);
+      }
+    } catch (err) {
+      console.warn('Screen WakeLock unavailable or rejected:', err);
+      updateWakeLockUI(false);
+    }
+  }
+}
+
+function releaseScreenWakeLock() {
+  if (wakeLockSentinel) {
+    wakeLockSentinel.release().catch(() => {});
+    wakeLockSentinel = null;
+  }
+  updateWakeLockUI(false);
+}
+
+function updateWakeLockUI(active) {
+  if (elements.flowWakeLockPill) {
+    if (active) {
+      elements.flowWakeLockPill.classList.remove('hidden');
+    } else {
+      elements.flowWakeLockPill.classList.add('hidden');
+    }
+  }
+}
+
+function startAudioKeepAlive(itemTitle = "G検定 聞き流し学習") {
+  // 1. 無音オーディオ再生によるOSバックグラウンドスリープ防止
+  try {
+    if (!silentKeepAliveAudio) {
+      silentKeepAliveAudio = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA');
+      silentKeepAliveAudio.loop = true;
+    }
+    silentKeepAliveAudio.play().catch(() => {});
+  } catch (e) {
+    console.warn('Silent audio keep-alive warning:', e);
+  }
+
+  // 2. Web Speech APIタイムアウトバグ防止ハートビート（10秒間隔）
+  stopSpeechHeartbeat();
+  speechHeartbeatTimer = setInterval(() => {
+    if (window.speechSynthesis && window.speechSynthesis.speaking && !window.speechSynthesis.paused) {
+      window.speechSynthesis.pause();
+      window.speechSynthesis.resume();
+    }
+  }, 10000);
+
+  // 3. MediaSession API（ロック画面・イヤホン操作対応）
+  if ('mediaSession' in navigator) {
+    try {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: itemTitle,
+        artist: 'G検定マスター',
+        album: '各章 聞き流し学習'
+      });
+      navigator.mediaSession.setActionHandler('play', () => togglePlayPauseAudioFlow());
+      navigator.mediaSession.setActionHandler('pause', () => togglePlayPauseAudioFlow());
+      navigator.mediaSession.setActionHandler('nexttrack', () => playNextAudioFlow(false));
+      navigator.mediaSession.setActionHandler('previoustrack', () => playPrevAudioFlow());
+    } catch (e) {
+      console.warn('MediaSession setup warning:', e);
+    }
+  }
+}
+
+function stopAudioKeepAlive() {
+  if (silentKeepAliveAudio) {
+    silentKeepAliveAudio.pause();
+  }
+  stopSpeechHeartbeat();
+}
+
+function stopSpeechHeartbeat() {
+  if (speechHeartbeatTimer) {
+    clearInterval(speechHeartbeatTimer);
+    speechHeartbeatTimer = null;
+  }
+}
+
+// 画面再表示時にWakeLockを再取得
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && state.audioFlow && state.audioFlow.isPlaying && !state.audioFlow.isPaused) {
+    requestScreenWakeLock();
+  }
+});
+
 function populateFlowCategorySelect() {
   if (!elements.flowCategorySelect) return;
   const currentVal = elements.flowCategorySelect.value || 'all';
@@ -1348,9 +1454,13 @@ function togglePlayPauseAudioFlow() {
   if (!state.audioFlow.isPlaying) {
     state.audioFlow.isPlaying = true;
     state.audioFlow.isPaused = false;
+    requestScreenWakeLock();
+    startAudioKeepAlive();
     playAudioFlowCurrentItem();
   } else if (state.audioFlow.isPaused) {
     state.audioFlow.isPaused = false;
+    requestScreenWakeLock();
+    startAudioKeepAlive();
     elements.btnFlowPlayPause.textContent = '⏸ 一時停止';
     elements.flowStatusBadge.textContent = '再生中 🔊';
     elements.flowStatusBadge.className = 'flow-status-badge playing';
@@ -1361,6 +1471,8 @@ function togglePlayPauseAudioFlow() {
     }
   } else {
     state.audioFlow.isPaused = true;
+    releaseScreenWakeLock();
+    stopAudioKeepAlive();
     if (state.audioFlow.timerId) {
       clearTimeout(state.audioFlow.timerId);
       state.audioFlow.timerId = null;
@@ -1375,6 +1487,9 @@ function togglePlayPauseAudioFlow() {
 }
 
 function stopAudioFlow() {
+  releaseScreenWakeLock();
+  stopAudioKeepAlive();
+
   if (state.audioFlow.timerId) {
     clearTimeout(state.audioFlow.timerId);
     state.audioFlow.timerId = null;
@@ -1489,6 +1604,11 @@ function playAudioFlowCurrentItem() {
   const current = items[idx];
   updateAudioFlowCard();
 
+  // スリープ防止 & キープアライブ起動
+  requestScreenWakeLock();
+  const currentTitle = state.audioFlow.mode === 'questions' ? `第${idx + 1}問: ${current.question.slice(0, 25)}...` : `用語: ${current.term}`;
+  startAudioKeepAlive(currentTitle);
+
   elements.btnFlowPlayPause.textContent = '⏸ 一時停止';
   elements.flowStatusBadge.textContent = '再生中 🔊';
   elements.flowStatusBadge.className = 'flow-status-badge playing';
@@ -1601,6 +1721,21 @@ function setupEventListeners() {
   elements.flowRepeatToggle.addEventListener('change', (e) => {
     state.audioFlow.repeat = e.target.checked;
   });
+
+  if (elements.flowWakeLockToggle) {
+    elements.flowWakeLockToggle.addEventListener('change', (e) => {
+      state.audioFlow.preventSleep = e.target.checked;
+      if (e.target.checked) {
+        if (state.audioFlow.isPlaying && !state.audioFlow.isPaused) {
+          requestScreenWakeLock();
+        }
+        showToast("💡 スリープ防止をONにしました（常時点灯）");
+      } else {
+        releaseScreenWakeLock();
+        showToast("スリープ防止をOFFにしました");
+      }
+    });
+  }
 
   elements.flowSpeedSelect.addEventListener('change', (e) => {
     state.audioFlow.speed = parseFloat(e.target.value);
