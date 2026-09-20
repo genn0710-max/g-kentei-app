@@ -44,6 +44,11 @@
         <span class="tab-label-full">分野別ドリル</span>
         <span class="tab-label-short">ドリル</span>
       </button>
+      <button class="nav-tab" data-tab="audio-flow-tab">
+        <span class="icon">🎧</span>
+        <span class="tab-label-full">各章 聞き流し</span>
+        <span class="tab-label-short">聞き流し</span>
+      </button>
       <button class="nav-tab" data-tab="terms-tab">
         <span class="icon">📖</span>
         <span class="tab-label-full">重要用語集</span>
@@ -284,7 +289,102 @@
       </div>
     </section>
 
-    <!-- 3. 重要用語集タブ -->
+    <!-- 3. 各章 聞き流し学習タブ -->
+    <section id="audio-flow-tab" class="tab-pane">
+      <div class="card flow-control-card">
+        <div class="flow-header">
+          <div>
+            <h2>🎧 各章・重要用語 聞き流し学習モード</h2>
+            <p class="subtitle">画面を見ずに音声だけで各分野の問題・正解・詳細解説や重要用語を連続インプット。通勤中・運動中・就寝前の耳学習に最適です。</p>
+          </div>
+          <div class="flow-mode-switch">
+            <button class="btn flow-mode-btn active" id="btn-flow-mode-questions" data-flow-mode="questions">📚 問題＋詳細解説</button>
+            <button class="btn flow-mode-btn" id="btn-flow-mode-terms" data-flow-mode="terms">📖 重要用語集</button>
+          </div>
+        </div>
+
+        <!-- 選択エリア（分野セレクター & 設定） -->
+        <div class="flow-settings-bar">
+          <div class="flow-category-select-wrapper">
+            <label for="flow-category-select">再生する章・分野:</label>
+            <select id="flow-category-select" class="form-control">
+              <option value="all">🎯 すべての分野をまとめて再生</option>
+              <!-- 動的生成 -->
+            </select>
+          </div>
+          <div class="flow-options-group">
+            <label class="flow-checkbox-label">
+              <input type="checkbox" id="flow-thinking-toggle" checked>
+              <span>⏱️ シンキングタイム (3秒考える)</span>
+            </label>
+            <label class="flow-checkbox-label">
+              <input type="checkbox" id="flow-repeat-toggle" checked>
+              <span>🔁 ループ再生</span>
+            </label>
+            <div class="flow-speed-group">
+              <label for="flow-speed-select">速度:</label>
+              <select id="flow-speed-select" class="form-control form-control-sm">
+                <option value="0.8">0.8x</option>
+                <option value="1.0" selected>1.0x (標準)</option>
+                <option value="1.2">1.2x (快適)</option>
+                <option value="1.5">1.5x (速聴)</option>
+                <option value="1.8">1.8x</option>
+                <option value="2.0">2.0x (倍速)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- プレイヤー操作コンソール -->
+        <div class="flow-player-console">
+          <div class="flow-status-row">
+            <span class="flow-status-badge" id="flow-status-badge">⏹ 停止中</span>
+            <span class="flow-counter-text" id="flow-counter-text">0 / 0 項目</span>
+            <span class="flow-category-pill" id="flow-current-category-pill">全般</span>
+          </div>
+
+          <div class="flow-progress-bar-wrapper">
+            <div class="flow-progress-bar-fill" id="flow-progress-bar-fill" style="width: 0%;"></div>
+          </div>
+
+          <div class="flow-controls-main">
+            <button id="btn-flow-prev" class="btn btn-secondary flow-btn-control" title="前の項目へ">⏮ 前へ</button>
+            <button id="btn-flow-play-pause" class="btn btn-primary btn-lg flow-btn-play" title="再生 / 一時停止">▶ 聞き流しを開始</button>
+            <button id="btn-flow-next" class="btn btn-secondary flow-btn-control" title="次の項目へ">次へ ⏭</button>
+            <button id="btn-flow-stop" class="btn btn-outline flow-btn-control" title="停止">⏹ 停止</button>
+          </div>
+        </div>
+
+        <!-- 現在再生中アイテムのハイライトカード -->
+        <div class="flow-current-card" id="flow-current-card">
+          <div class="flow-card-badge-row">
+            <span class="flow-item-num" id="flow-item-num">項目 1</span>
+            <span class="flow-step-phase" id="flow-step-phase">「聞き流しを開始」ボタンを押すと音声学習がスタートします</span>
+          </div>
+          <h3 class="flow-item-title" id="flow-item-title">各分野の問題と詳細解説、または重要用語が自動で順番に読み上げられます。</h3>
+          <div class="flow-item-answer-box hidden" id="flow-item-answer-box">
+            <span class="flow-ans-label">正解:</span>
+            <span class="flow-ans-text" id="flow-item-answer-text"></span>
+          </div>
+          <div class="flow-item-explanation-box hidden" id="flow-item-explanation-box">
+            <div class="flow-exp-label">詳細解説:</div>
+            <div class="flow-exp-text" id="flow-item-explanation-text"></div>
+          </div>
+        </div>
+
+        <!-- リスト一覧（タップでその項目へジャンプ） -->
+        <div class="flow-playlist-wrapper">
+          <div class="flow-playlist-header">
+            <h4>📋 再生リスト一覧 (<span id="flow-list-count">0</span>件) <small style="font-weight:normal; color:#64748b;">※タップでその問題へ即座にスキップ</small></h4>
+          </div>
+          <div class="flow-playlist" id="flow-playlist">
+            <!-- 動的生成 -->
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. 重要用語集タブ -->
     <section id="terms-tab" class="tab-pane">
       <div class="card">
         <div class="terms-top-bar">
@@ -297,6 +397,7 @@
             <select id="terms-category-filter" class="form-control">
               <option value="all">すべての分野</option>
             </select>
+            <button id="btn-start-terms-flow" class="btn btn-outline btn-sm" title="重要用語を音声で連続聞き流し">🎧 用語を聞き流す</button>
           </div>
         </div>
         <div class="terms-list" id="terms-container">

@@ -45,6 +45,21 @@ const state = {
     currentIndex: 0
   },
 
+  // 各章・重要用語 聞き流しモード状態
+  audioFlow: {
+    mode: 'questions', // 'questions' | 'terms'
+    category: 'all',
+    items: [],
+    currentIndex: 0,
+    isPlaying: false,
+    isPaused: false,
+    thinkingTime: true,
+    repeat: true,
+    speed: 1.0,
+    phase: 'idle', // 'idle' | 'question' | 'thinking' | 'explanation' | 'term'
+    timerId: null
+  },
+
   // 選択中の用語モーダルデータ
   activeModalTerm: null
 };
@@ -131,6 +146,33 @@ const elements = {
   btnSpeakDrillExp: document.getElementById('btn-speak-drill-exp'),
   drillExplanationText: document.getElementById('drill-explanation-text'),
   btnDrillNext: document.getElementById('btn-drill-next'),
+
+  // 聞き流しモード要素
+  flowModeBtnQuestions: document.getElementById('btn-flow-mode-questions'),
+  flowModeBtnTerms: document.getElementById('btn-flow-mode-terms'),
+  flowCategorySelect: document.getElementById('flow-category-select'),
+  flowThinkingToggle: document.getElementById('flow-thinking-toggle'),
+  flowRepeatToggle: document.getElementById('flow-repeat-toggle'),
+  flowSpeedSelect: document.getElementById('flow-speed-select'),
+  flowStatusBadge: document.getElementById('flow-status-badge'),
+  flowCounterText: document.getElementById('flow-counter-text'),
+  flowCurrentCategoryPill: document.getElementById('flow-current-category-pill'),
+  flowProgressBarFill: document.getElementById('flow-progress-bar-fill'),
+  btnFlowPrev: document.getElementById('btn-flow-prev'),
+  btnFlowPlayPause: document.getElementById('btn-flow-play-pause'),
+  btnFlowNext: document.getElementById('btn-flow-next'),
+  btnFlowStop: document.getElementById('btn-flow-stop'),
+  flowCurrentCard: document.getElementById('flow-current-card'),
+  flowItemNum: document.getElementById('flow-item-num'),
+  flowStepPhase: document.getElementById('flow-step-phase'),
+  flowItemTitle: document.getElementById('flow-item-title'),
+  flowItemAnswerBox: document.getElementById('flow-item-answer-box'),
+  flowItemAnswerText: document.getElementById('flow-item-answer-text'),
+  flowItemExplanationBox: document.getElementById('flow-item-explanation-box'),
+  flowItemExplanationText: document.getElementById('flow-item-explanation-text'),
+  flowListCount: document.getElementById('flow-list-count'),
+  flowPlaylist: document.getElementById('flow-playlist'),
+  btnStartTermsFlow: document.getElementById('btn-start-terms-flow'),
 
   // 用語集要素
   termsContainer: document.getElementById('terms-container'),
@@ -435,12 +477,18 @@ function setupTabs() {
       const targetId = tab.dataset.tab;
       document.getElementById(targetId).classList.add('active');
 
+      if (targetId !== 'audio-flow-tab' && state.audioFlow && state.audioFlow.isPlaying) {
+        stopAudioFlow();
+      }
+
       if (targetId === 'admin-tab') {
         renderAdminTable();
       } else if (targetId === 'terms-tab') {
         renderTermsList();
       } else if (targetId === 'drill-tab') {
         renderDrillCategories();
+      } else if (targetId === 'audio-flow-tab') {
+        initAudioFlow();
       }
     });
   });
@@ -451,6 +499,8 @@ function populateCategoryDropdowns() {
   elements.termsCategoryFilter.innerHTML = '<option value="all">すべての分野</option>';
   // 管理フォーム
   elements.formCategory.innerHTML = '';
+  // 聞き流しカテゴリ
+  populateFlowCategorySelect();
 
   state.categories.forEach(cat => {
     const opt1 = document.createElement('option');
@@ -803,9 +853,25 @@ function renderDrillCategories() {
       <p>${escapeHtml(cat.description)}</p>
       <div class="category-footer">
         <span>収録: ${count} 問</span>
-        <span>特訓を開始する →</span>
+      </div>
+      <div class="drill-card-actions">
+        <button class="btn btn-primary btn-drill-start">特訓を開始 →</button>
+        <button class="btn btn-outline btn-drill-flow">🎧 聞き流し</button>
       </div>
     `;
+
+    const btnStart = card.querySelector('.btn-drill-start');
+    const btnFlow = card.querySelector('.btn-drill-flow');
+
+    btnStart.addEventListener('click', (e) => {
+      e.stopPropagation();
+      startCategoryDrill(cat.name);
+    });
+
+    btnFlow.addEventListener('click', (e) => {
+      e.stopPropagation();
+      startAudioFlowForCategory(cat.name, 'questions');
+    });
 
     card.addEventListener('click', () => {
       startCategoryDrill(cat.name);
@@ -1102,9 +1168,459 @@ function renderAdminTable() {
 window.deleteQuestion = deleteQuestion;
 
 // ==========================================
+// 6. 各セクション・重要用語 聞き流しモード（Audio Flow）
+// ==========================================
+function populateFlowCategorySelect() {
+  if (!elements.flowCategorySelect) return;
+  const currentVal = elements.flowCategorySelect.value || 'all';
+  elements.flowCategorySelect.innerHTML = '<option value="all">🎯 すべての分野をまとめて再生</option>';
+  state.categories.forEach(cat => {
+    const opt = document.createElement('option');
+    opt.value = cat.name;
+    opt.textContent = `${cat.name}`;
+    elements.flowCategorySelect.appendChild(opt);
+  });
+  elements.flowCategorySelect.value = currentVal;
+}
+
+function initAudioFlow() {
+  populateFlowCategorySelect();
+  if (!state.audioFlow.items || state.audioFlow.items.length === 0) {
+    loadAudioFlowItems();
+  } else {
+    updateAudioFlowCard();
+    renderAudioFlowPlaylist();
+  }
+}
+
+function setAudioFlowMode(mode) {
+  if (state.audioFlow.mode === mode && state.audioFlow.items.length > 0) return;
+  stopAudioFlow();
+  state.audioFlow.mode = mode;
+
+  if (mode === 'questions') {
+    elements.flowModeBtnQuestions.classList.add('active');
+    elements.flowModeBtnTerms.classList.remove('active');
+    if (elements.flowThinkingToggle && elements.flowThinkingToggle.parentElement) {
+      elements.flowThinkingToggle.parentElement.style.display = 'inline-flex';
+    }
+  } else {
+    elements.flowModeBtnQuestions.classList.remove('active');
+    elements.flowModeBtnTerms.classList.add('active');
+    if (elements.flowThinkingToggle && elements.flowThinkingToggle.parentElement) {
+      elements.flowThinkingToggle.parentElement.style.display = 'none';
+    }
+  }
+
+  loadAudioFlowItems();
+}
+
+function loadAudioFlowItems() {
+  const cat = elements.flowCategorySelect ? elements.flowCategorySelect.value : 'all';
+  state.audioFlow.category = cat;
+
+  if (state.audioFlow.mode === 'questions') {
+    if (cat === 'all') {
+      state.audioFlow.items = [...state.questions];
+    } else {
+      state.audioFlow.items = state.questions.filter(q => q.category === cat);
+    }
+  } else {
+    if (cat === 'all') {
+      state.audioFlow.items = [...state.terms];
+    } else {
+      state.audioFlow.items = state.terms.filter(t => t.category === cat);
+    }
+  }
+
+  state.audioFlow.currentIndex = 0;
+  updateAudioFlowCard();
+  renderAudioFlowPlaylist();
+}
+
+function updateAudioFlowCard() {
+  const items = state.audioFlow.items;
+  const idx = state.audioFlow.currentIndex;
+
+  if (!items || items.length === 0) {
+    elements.flowCounterText.textContent = '0 / 0 項目';
+    elements.flowCurrentCategoryPill.textContent = '該当なし';
+    elements.flowProgressBarFill.style.width = '0%';
+    elements.flowItemNum.textContent = 'なし';
+    elements.flowStepPhase.textContent = '項目がありません';
+    elements.flowItemTitle.textContent = '該当する問題・用語がありません。別の分野を選択してください。';
+    elements.flowItemAnswerBox.classList.add('hidden');
+    elements.flowItemExplanationBox.classList.add('hidden');
+    return;
+  }
+
+  const current = items[idx];
+  elements.flowCounterText.textContent = `${idx + 1} / ${items.length} 項目`;
+  elements.flowCurrentCategoryPill.textContent = current.category || '全般';
+  const progressPercent = Math.round(((idx + 1) / items.length) * 100);
+  elements.flowProgressBarFill.style.width = `${progressPercent}%`;
+
+  if (state.audioFlow.mode === 'questions') {
+    elements.flowItemNum.textContent = `第 ${idx + 1} 問`;
+    elements.flowItemTitle.textContent = current.question;
+    const ansIdx = current.answer !== undefined ? current.answer : 0;
+    const ansText = current.choices && current.choices[ansIdx] ? current.choices[ansIdx] : '';
+    elements.flowItemAnswerBox.querySelector('.flow-ans-label').textContent = '正解:';
+    elements.flowItemAnswerText.textContent = `選択肢 ${ansIdx + 1} : ${ansText}`;
+    elements.flowItemExplanationText.innerHTML = renderTextWithTermLinks(current.explanation || '');
+
+    if (state.audioFlow.isPlaying && (state.audioFlow.phase === 'question' || state.audioFlow.phase === 'thinking')) {
+      elements.flowItemAnswerBox.classList.add('hidden');
+      elements.flowItemExplanationBox.classList.add('hidden');
+    } else {
+      elements.flowItemAnswerBox.classList.remove('hidden');
+      elements.flowItemExplanationBox.classList.remove('hidden');
+    }
+  } else {
+    // 重要用語モード
+    const stars = '★'.repeat(current.importance || 1);
+    elements.flowItemNum.textContent = `重要用語 (${stars})`;
+    elements.flowItemTitle.textContent = current.term;
+    elements.flowItemAnswerBox.querySelector('.flow-ans-label').textContent = '要約:';
+    elements.flowItemAnswerText.textContent = current.summary || '';
+    elements.flowItemExplanationText.innerHTML = renderTextWithTermLinks(current.explanation || '');
+    elements.flowItemAnswerBox.classList.remove('hidden');
+    elements.flowItemExplanationBox.classList.remove('hidden');
+  }
+
+  // プレイリストのアクティブハイライト更新
+  const plItems = elements.flowPlaylist.querySelectorAll('.flow-playlist-item');
+  plItems.forEach((el, i) => {
+    if (i === idx) {
+      el.classList.add('active');
+      el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    } else {
+      el.classList.remove('active');
+    }
+  });
+}
+
+function renderAudioFlowPlaylist() {
+  elements.flowPlaylist.innerHTML = '';
+  const items = state.audioFlow.items;
+  elements.flowListCount.textContent = items.length;
+
+  items.forEach((item, index) => {
+    const div = document.createElement('div');
+    div.className = `flow-playlist-item ${index === state.audioFlow.currentIndex ? 'active' : ''}`;
+
+    const titleText = state.audioFlow.mode === 'questions' ? item.question : item.term;
+    const badgeText = state.audioFlow.mode === 'questions' ? (item.category ? item.category.slice(0, 8) + '...' : '') : `★${item.importance || 1}`;
+
+    div.innerHTML = `
+      <span class="flow-pl-index">#${index + 1}</span>
+      <span class="flow-pl-title" title="${escapeHtml(titleText)}">${escapeHtml(titleText)}</span>
+      <span class="flow-pl-badge">${escapeHtml(badgeText)}</span>
+    `;
+
+    div.addEventListener('click', () => {
+      jumpToAudioFlowItem(index);
+    });
+
+    elements.flowPlaylist.appendChild(div);
+  });
+}
+
+function jumpToAudioFlowItem(index) {
+  if (state.audioFlow.timerId) {
+    clearTimeout(state.audioFlow.timerId);
+    state.audioFlow.timerId = null;
+  }
+  state.audioFlow.currentIndex = index;
+  updateAudioFlowCard();
+
+  if (state.audioFlow.isPlaying) {
+    playAudioFlowCurrentItem();
+  }
+}
+
+function togglePlayPauseAudioFlow() {
+  if (!state.audioFlow.items || state.audioFlow.items.length === 0) {
+    showToast("⚠️ 再生対象がありません");
+    return;
+  }
+
+  if (!state.audioFlow.isPlaying) {
+    state.audioFlow.isPlaying = true;
+    state.audioFlow.isPaused = false;
+    playAudioFlowCurrentItem();
+  } else if (state.audioFlow.isPaused) {
+    state.audioFlow.isPaused = false;
+    elements.btnFlowPlayPause.textContent = '⏸ 一時停止';
+    elements.flowStatusBadge.textContent = '再生中 🔊';
+    elements.flowStatusBadge.className = 'flow-status-badge playing';
+    if (state.tts.synth && state.tts.synth.paused) {
+      state.tts.synth.resume();
+    } else {
+      playAudioFlowCurrentItem();
+    }
+  } else {
+    state.audioFlow.isPaused = true;
+    if (state.audioFlow.timerId) {
+      clearTimeout(state.audioFlow.timerId);
+      state.audioFlow.timerId = null;
+    }
+    if (state.tts.synth) {
+      state.tts.synth.pause();
+    }
+    elements.btnFlowPlayPause.textContent = '▶ 再開する';
+    elements.flowStatusBadge.textContent = '一時停止 ⏸';
+    elements.flowStatusBadge.className = 'flow-status-badge paused';
+  }
+}
+
+function stopAudioFlow() {
+  if (state.audioFlow.timerId) {
+    clearTimeout(state.audioFlow.timerId);
+    state.audioFlow.timerId = null;
+  }
+  if (state.tts.synth) {
+    state.tts.synth.cancel();
+  }
+
+  state.audioFlow.isPlaying = false;
+  state.audioFlow.isPaused = false;
+  state.audioFlow.phase = 'idle';
+
+  elements.flowStatusBadge.textContent = '⏹ 停止中';
+  elements.flowStatusBadge.className = 'flow-status-badge';
+  elements.btnFlowPlayPause.textContent = '▶ 聞き流しを開始';
+  elements.flowStepPhase.textContent = '「聞き流しを開始」ボタンを押すと音声学習がスタートします';
+  elements.flowItemAnswerBox.classList.remove('hidden');
+  elements.flowItemExplanationBox.classList.remove('hidden');
+}
+
+function playNextAudioFlow(isAuto = false) {
+  if (state.audioFlow.timerId) {
+    clearTimeout(state.audioFlow.timerId);
+    state.audioFlow.timerId = null;
+  }
+  if (state.tts.synth) {
+    state.tts.synth.cancel();
+  }
+
+  const items = state.audioFlow.items;
+  if (state.audioFlow.currentIndex < items.length - 1) {
+    state.audioFlow.currentIndex++;
+    updateAudioFlowCard();
+    if (state.audioFlow.isPlaying) {
+      playAudioFlowCurrentItem();
+    }
+  } else {
+    if (state.audioFlow.repeat) {
+      state.audioFlow.currentIndex = 0;
+      updateAudioFlowCard();
+      showToast("🔁 最初からループ再生します");
+      if (state.audioFlow.isPlaying) {
+        playAudioFlowCurrentItem();
+      }
+    } else {
+      stopAudioFlow();
+      showToast("🎉 すべての項目の聞き流しが完了しました！");
+    }
+  }
+}
+
+function playPrevAudioFlow() {
+  if (state.audioFlow.timerId) {
+    clearTimeout(state.audioFlow.timerId);
+    state.audioFlow.timerId = null;
+  }
+  if (state.tts.synth) {
+    state.tts.synth.cancel();
+  }
+
+  if (state.audioFlow.currentIndex > 0) {
+    state.audioFlow.currentIndex--;
+  } else {
+    state.audioFlow.currentIndex = state.audioFlow.items.length - 1;
+  }
+  updateAudioFlowCard();
+  if (state.audioFlow.isPlaying) {
+    playAudioFlowCurrentItem();
+  }
+}
+
+function speakTextFlow(text, onEnd) {
+  if (!state.tts.synth) {
+    if (onEnd) onEnd();
+    return;
+  }
+
+  state.tts.synth.cancel();
+
+  const cleanText = text
+    .replace(/【|】|■|○|×|★/g, ' ')
+    .replace(/第\s*(\d+)\s*問/g, 'だい $1 もん')
+    .replace(/\n+/g, '。 ');
+
+  const utterance = new SpeechSynthesisUtterance(cleanText);
+  if (state.tts.voice) utterance.voice = state.tts.voice;
+  utterance.lang = 'ja-JP';
+  utterance.rate = state.audioFlow.speed || 1.0;
+  utterance.pitch = 1.0;
+
+  utterance.onend = () => {
+    if (state.audioFlow.isPlaying && !state.audioFlow.isPaused) {
+      if (onEnd) onEnd();
+    }
+  };
+
+  utterance.onerror = (e) => {
+    console.error("AudioFlow TTS Error:", e);
+    if (state.audioFlow.isPlaying && !state.audioFlow.isPaused) {
+      if (onEnd) onEnd();
+    }
+  };
+
+  state.tts.synth.speak(utterance);
+}
+
+function playAudioFlowCurrentItem() {
+  const items = state.audioFlow.items;
+  const idx = state.audioFlow.currentIndex;
+  if (!items || items.length === 0 || idx >= items.length) return;
+
+  const current = items[idx];
+  updateAudioFlowCard();
+
+  elements.btnFlowPlayPause.textContent = '⏸ 一時停止';
+  elements.flowStatusBadge.textContent = '再生中 🔊';
+  elements.flowStatusBadge.className = 'flow-status-badge playing';
+
+  if (state.audioFlow.mode === 'questions') {
+    state.audioFlow.phase = 'question';
+    elements.flowStepPhase.textContent = '🔊 問題文を読み上げ中...';
+    elements.flowItemAnswerBox.classList.add('hidden');
+    elements.flowItemExplanationBox.classList.add('hidden');
+
+    let speech = `第 ${idx + 1} 問。${current.question}。`;
+    if (current.choices && current.choices.length > 0) {
+      speech += ' 選択肢。';
+      current.choices.forEach((c, i) => {
+        speech += ` ${i + 1} 番、${c}。`;
+      });
+    }
+
+    speakTextFlow(speech, () => {
+      if (state.audioFlow.thinkingTime) {
+        state.audioFlow.phase = 'thinking';
+        elements.flowStepPhase.textContent = '⏱️ シンキングタイム（3秒間）...';
+        elements.flowStatusBadge.textContent = '思考タイム ⏱️';
+        elements.flowStatusBadge.className = 'flow-status-badge thinking';
+
+        state.audioFlow.timerId = setTimeout(() => {
+          speakAnswerAndExplanation(current, idx);
+        }, 3000);
+      } else {
+        speakAnswerAndExplanation(current, idx);
+      }
+    });
+
+  } else {
+    // 用語モード
+    state.audioFlow.phase = 'term';
+    elements.flowStepPhase.textContent = '📖 用語と詳細解説を読み上げ中...';
+    elements.flowItemAnswerBox.classList.remove('hidden');
+    elements.flowItemExplanationBox.classList.remove('hidden');
+
+    const speech = `用語、${current.term}。要約。${current.summary || ''}。詳細解説。${current.explanation || ''}。`;
+
+    speakTextFlow(speech, () => {
+      state.audioFlow.timerId = setTimeout(() => {
+        playNextAudioFlow(true);
+      }, 1500);
+    });
+  }
+}
+
+function speakAnswerAndExplanation(current, idx) {
+  if (!state.audioFlow.isPlaying || state.audioFlow.isPaused || state.audioFlow.currentIndex !== idx) {
+    return;
+  }
+
+  state.audioFlow.phase = 'explanation';
+  elements.flowStepPhase.textContent = '💡 正解と詳細解説を読み上げ中...';
+  elements.flowStatusBadge.textContent = '正解・解説 🔊';
+  elements.flowStatusBadge.className = 'flow-status-badge playing';
+  elements.flowItemAnswerBox.classList.remove('hidden');
+  elements.flowItemExplanationBox.classList.remove('hidden');
+
+  const ansIdx = current.answer !== undefined ? current.answer : 0;
+  const ansText = current.choices && current.choices[ansIdx] ? current.choices[ansIdx] : '';
+  const speech = `正解は、${ansIdx + 1}番、${ansText}です。解説。${current.explanation || ''}。`;
+
+  speakTextFlow(speech, () => {
+    state.audioFlow.timerId = setTimeout(() => {
+      playNextAudioFlow(true);
+    }, 2000);
+  });
+}
+
+function startAudioFlowForCategory(categoryName, mode = 'questions') {
+  const tabBtn = document.querySelector('.nav-tab[data-tab="audio-flow-tab"]');
+  if (tabBtn) tabBtn.click();
+
+  setAudioFlowMode(mode);
+
+  if (elements.flowCategorySelect) {
+    elements.flowCategorySelect.value = categoryName || 'all';
+  }
+  loadAudioFlowItems();
+
+  state.audioFlow.isPlaying = true;
+  state.audioFlow.isPaused = false;
+  playAudioFlowCurrentItem();
+  showToast(`🎧 「${categoryName || '全体'}」の聞き流し学習を開始しました`);
+}
+
+window.startAudioFlowForCategory = startAudioFlowForCategory;
+
+// ==========================================
 // イベントリスナー設定
 // ==========================================
 function setupEventListeners() {
+  // 聞き流しモード イベント
+  elements.flowModeBtnQuestions.addEventListener('click', () => setAudioFlowMode('questions'));
+  elements.flowModeBtnTerms.addEventListener('click', () => setAudioFlowMode('terms'));
+
+  elements.flowCategorySelect.addEventListener('change', () => {
+    stopAudioFlow();
+    loadAudioFlowItems();
+  });
+
+  elements.flowThinkingToggle.addEventListener('change', (e) => {
+    state.audioFlow.thinkingTime = e.target.checked;
+  });
+
+  elements.flowRepeatToggle.addEventListener('change', (e) => {
+    state.audioFlow.repeat = e.target.checked;
+  });
+
+  elements.flowSpeedSelect.addEventListener('change', (e) => {
+    state.audioFlow.speed = parseFloat(e.target.value);
+    if (state.audioFlow.isPlaying && !state.audioFlow.isPaused) {
+      playAudioFlowCurrentItem();
+    }
+  });
+
+  elements.btnFlowPlayPause.addEventListener('click', togglePlayPauseAudioFlow);
+  elements.btnFlowNext.addEventListener('click', () => playNextAudioFlow(false));
+  elements.btnFlowPrev.addEventListener('click', playPrevAudioFlow);
+  elements.btnFlowStop.addEventListener('click', stopAudioFlow);
+
+  if (elements.btnStartTermsFlow) {
+    elements.btnStartTermsFlow.addEventListener('click', () => {
+      const cat = elements.termsCategoryFilter ? elements.termsCategoryFilter.value : 'all';
+      startAudioFlowForCategory(cat, 'terms');
+    });
+  }
+
   // 音声コントロールバー
   elements.btnAudioPlayPause.addEventListener('click', togglePlayPauseSpeech);
   elements.btnAudioStop.addEventListener('click', stopSpeaking);
