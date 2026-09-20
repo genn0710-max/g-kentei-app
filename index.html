@@ -313,6 +313,10 @@
             </select>
           </div>
           <div class="flow-options-group">
+            <label class="flow-checkbox-label" title="再生中にスマートフォンの画面が自動消灯・スリープするのを防ぎます">
+              <input type="checkbox" id="flow-wakelock-toggle" checked>
+              <span>💡 スリープ防止 (常時点灯)</span>
+            </label>
             <label class="flow-checkbox-label">
               <input type="checkbox" id="flow-thinking-toggle" checked>
               <span>⏱️ シンキングタイム (3秒考える)</span>
@@ -341,6 +345,7 @@
             <span class="flow-status-badge" id="flow-status-badge">⏹ 停止中</span>
             <span class="flow-counter-text" id="flow-counter-text">0 / 0 項目</span>
             <span class="flow-category-pill" id="flow-current-category-pill">全般</span>
+            <span class="flow-wakelock-pill hidden" id="flow-wakelock-pill">🔆 画面点灯維持中</span>
           </div>
 
           <div class="flow-progress-bar-wrapper">
