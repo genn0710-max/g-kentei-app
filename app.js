@@ -462,7 +462,7 @@ async function initApp() {
         if (!newWorker) return;
         newWorker.addEventListener('statechange', () => {
           if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-            showToast("✨ 最新バージョン(v3.7)に自動更新されました！");
+            showToast("✨ 最新バージョン(v3.8)に自動更新されました！");
           }
         });
       });
@@ -1398,9 +1398,9 @@ function updateAudioFlowCard() {
     elements.flowItemAnswerText.textContent = `選択肢 ${ansIdx + 1} : ${ansText}`;
     elements.flowItemExplanationText.innerHTML = renderTextWithTermLinks(current.explanation || '');
 
-    const isAnswerPhase = !state.audioFlow.isPlaying ||
-      state.audioFlow.phase === 'explanation' ||
-      state.audioFlow.phase === 'idle';
+    // 正解・詳細解説・選択肢ハイライトを表示するのは「解説フェーズ(explanation)」のみ
+    // 問題文読み上げ中(question)、思考中(thinking)、未再生(idle)の時は正解を絶対に表示しない
+    const isAnswerPhase = (state.audioFlow.phase === 'explanation');
 
     // 選択肢一覧の描画
     if (elements.flowChoicesList) {
@@ -1421,12 +1421,12 @@ function updateAudioFlowCard() {
       }
     }
 
-    if (state.audioFlow.isPlaying && (state.audioFlow.phase === 'question' || state.audioFlow.phase === 'thinking')) {
-      elements.flowItemAnswerBox.classList.add('hidden');
-      elements.flowItemExplanationBox.classList.add('hidden');
-    } else {
+    if (isAnswerPhase) {
       elements.flowItemAnswerBox.classList.remove('hidden');
       elements.flowItemExplanationBox.classList.remove('hidden');
+    } else {
+      elements.flowItemAnswerBox.classList.add('hidden');
+      elements.flowItemExplanationBox.classList.add('hidden');
     }
   } else {
     // 重要用語モード（選択肢は非表示）
@@ -1488,6 +1488,9 @@ function jumpToAudioFlowItem(index) {
     state.audioFlow.timerId = null;
   }
   state.audioFlow.currentIndex = index;
+  state.audioFlow.phase = state.audioFlow.isPlaying
+    ? (state.audioFlow.mode === 'questions' ? 'question' : 'term')
+    : 'idle';
   updateAudioFlowCard();
 
   if (state.audioFlow.isPlaying) {
@@ -1587,6 +1590,7 @@ function playNextAudioFlow(isAuto = false) {
   const items = state.audioFlow.items;
   if (state.audioFlow.currentIndex < items.length - 1) {
     state.audioFlow.currentIndex++;
+    state.audioFlow.phase = state.audioFlow.mode === 'questions' ? 'question' : 'term';
     updateAudioFlowCard();
     if (state.audioFlow.isPlaying) {
       playAudioFlowCurrentItem();
@@ -1594,6 +1598,7 @@ function playNextAudioFlow(isAuto = false) {
   } else {
     if (state.audioFlow.repeat) {
       state.audioFlow.currentIndex = 0;
+      state.audioFlow.phase = state.audioFlow.mode === 'questions' ? 'question' : 'term';
       updateAudioFlowCard();
       showToast("🔁 最初からループ再生します");
       if (state.audioFlow.isPlaying) {
@@ -1627,6 +1632,7 @@ function playPrevAudioFlow() {
   } else {
     state.audioFlow.currentIndex = state.audioFlow.items.length - 1;
   }
+  state.audioFlow.phase = state.audioFlow.mode === 'questions' ? 'question' : 'term';
   updateAudioFlowCard();
   if (state.audioFlow.isPlaying) {
     playAudioFlowCurrentItem();
@@ -1713,6 +1719,11 @@ function playAudioFlowCurrentItem() {
   if (!items || items.length === 0 || idx >= items.length) return;
 
   const current = items[idx];
+
+  // まず状態フェーズを問題読み上げに設定
+  state.audioFlow.phase = state.audioFlow.mode === 'questions' ? 'question' : 'term';
+
+  // カードを更新（phase='question'なので、正解ハイライト・正解ボックス・解説ボックスが完全に非表示になる）
   updateAudioFlowCard();
 
   // スリープ防止 & キープアライブ起動
@@ -1725,10 +1736,7 @@ function playAudioFlowCurrentItem() {
   elements.flowStatusBadge.className = 'flow-status-badge playing';
 
   if (state.audioFlow.mode === 'questions') {
-    state.audioFlow.phase = 'question';
     elements.flowStepPhase.textContent = '🔊 問題文を読み上げ中...';
-    elements.flowItemAnswerBox.classList.add('hidden');
-    elements.flowItemExplanationBox.classList.add('hidden');
 
     let speech = `第 ${idx + 1} 問。${current.question}。`;
     if (current.choices && current.choices.length > 0) {
@@ -1741,6 +1749,7 @@ function playAudioFlowCurrentItem() {
     speakTextFlow(speech, idx, () => {
       if (state.audioFlow.thinkingTime) {
         state.audioFlow.phase = 'thinking';
+        updateAudioFlowCard(); // 思考中も正解・解説は非表示を維持
         elements.flowStepPhase.textContent = '⏱️ シンキングタイム（3秒間）...';
         elements.flowStatusBadge.textContent = '思考タイム ⏱️';
         elements.flowStatusBadge.className = 'flow-status-badge thinking';
