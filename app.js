@@ -169,6 +169,7 @@ const elements = {
   flowItemNum: document.getElementById('flow-item-num'),
   flowStepPhase: document.getElementById('flow-step-phase'),
   flowItemTitle: document.getElementById('flow-item-title'),
+  flowChoicesList: document.getElementById('flow-choices-list'),
   flowItemAnswerBox: document.getElementById('flow-item-answer-box'),
   flowItemAnswerText: document.getElementById('flow-item-answer-text'),
   flowItemExplanationBox: document.getElementById('flow-item-explanation-box'),
@@ -461,7 +462,7 @@ async function initApp() {
         if (!newWorker) return;
         newWorker.addEventListener('statechange', () => {
           if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-            showToast("✨ 最新バージョン(v3.6)に自動更新されました！");
+            showToast("✨ 最新バージョン(v3.7)に自動更新されました！");
           }
         });
       });
@@ -1373,6 +1374,10 @@ function updateAudioFlowCard() {
     elements.flowItemNum.textContent = 'なし';
     elements.flowStepPhase.textContent = '項目がありません';
     elements.flowItemTitle.textContent = '該当する問題・用語がありません。別の分野を選択してください。';
+    if (elements.flowChoicesList) {
+      elements.flowChoicesList.innerHTML = '';
+      elements.flowChoicesList.classList.add('hidden');
+    }
     elements.flowItemAnswerBox.classList.add('hidden');
     elements.flowItemExplanationBox.classList.add('hidden');
     return;
@@ -1393,6 +1398,29 @@ function updateAudioFlowCard() {
     elements.flowItemAnswerText.textContent = `選択肢 ${ansIdx + 1} : ${ansText}`;
     elements.flowItemExplanationText.innerHTML = renderTextWithTermLinks(current.explanation || '');
 
+    const isAnswerPhase = !state.audioFlow.isPlaying ||
+      state.audioFlow.phase === 'explanation' ||
+      state.audioFlow.phase === 'idle';
+
+    // 選択肢一覧の描画
+    if (elements.flowChoicesList) {
+      elements.flowChoicesList.innerHTML = '';
+      elements.flowChoicesList.classList.remove('hidden');
+
+      if (current.choices && Array.isArray(current.choices)) {
+        current.choices.forEach((choice, cIdx) => {
+          const choiceEl = document.createElement('div');
+          const isCorrect = isAnswerPhase && (cIdx === ansIdx);
+          choiceEl.className = `flow-choice-item ${isCorrect ? 'correct' : ''}`;
+          choiceEl.innerHTML = `
+            <span class="flow-choice-badge">${cIdx + 1}</span>
+            <span class="flow-choice-text">${escapeHtml(choice)}</span>
+          `;
+          elements.flowChoicesList.appendChild(choiceEl);
+        });
+      }
+    }
+
     if (state.audioFlow.isPlaying && (state.audioFlow.phase === 'question' || state.audioFlow.phase === 'thinking')) {
       elements.flowItemAnswerBox.classList.add('hidden');
       elements.flowItemExplanationBox.classList.add('hidden');
@@ -1401,7 +1429,11 @@ function updateAudioFlowCard() {
       elements.flowItemExplanationBox.classList.remove('hidden');
     }
   } else {
-    // 重要用語モード
+    // 重要用語モード（選択肢は非表示）
+    if (elements.flowChoicesList) {
+      elements.flowChoicesList.innerHTML = '';
+      elements.flowChoicesList.classList.add('hidden');
+    }
     const stars = '★'.repeat(current.importance || 1);
     elements.flowItemNum.textContent = `重要用語 (${stars})`;
     elements.flowItemTitle.textContent = current.term;
@@ -1533,8 +1565,7 @@ function stopAudioFlow() {
   elements.flowStatusBadge.className = 'flow-status-badge';
   elements.btnFlowPlayPause.textContent = '▶ 聞き流しを開始';
   elements.flowStepPhase.textContent = '「聞き流しを開始」ボタンを押すと音声学習がスタートします';
-  elements.flowItemAnswerBox.classList.remove('hidden');
-  elements.flowItemExplanationBox.classList.remove('hidden');
+  updateAudioFlowCard();
 }
 
 function playNextAudioFlow(isAuto = false) {
@@ -1748,8 +1779,7 @@ function speakAnswerAndExplanation(current, idx) {
   elements.flowStepPhase.textContent = '💡 正解と詳細解説を読み上げ中...';
   elements.flowStatusBadge.textContent = '正解・解説 🔊';
   elements.flowStatusBadge.className = 'flow-status-badge playing';
-  elements.flowItemAnswerBox.classList.remove('hidden');
-  elements.flowItemExplanationBox.classList.remove('hidden');
+  updateAudioFlowCard();
 
   const ansIdx = current.answer !== undefined ? current.answer : 0;
   const ansText = current.choices && current.choices[ansIdx] ? current.choices[ansIdx] : '';

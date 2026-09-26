@@ -1,12 +1,12 @@
-// G検定学習システム Service Worker v3.6 (暴走スキップ解消・AI発音完全対応・v3.6バッジ)
-const CACHE_NAME = 'gkentei-v3.6';
+// G検定学習システム Service Worker v3.7 (聞き流し選択肢表示・正解ハイライト・v3.7バッジ)
+const CACHE_NAME = 'gkentei-v3.7';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
   './style.css',
-  './style.css?v=3.6',
+  './style.css?v=3.7',
   './app.js',
-  './app.js?v=3.6',
+  './app.js?v=3.7',
   './manifest.json',
   './data/categories.json',
   './data/questions.json',
