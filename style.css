@@ -117,6 +117,15 @@ body {
   font-weight: 600;
 }
 
+.version-pill {
+  background: #2563eb !important;
+  color: #ffffff !important;
+  font-weight: 700;
+  border-color: #1d4ed8 !important;
+  padding: 2px 8px !important;
+  letter-spacing: 0.5px;
+}
+
 .pulse-dot {
   width: 8px;
   height: 8px;
@@ -1643,7 +1652,7 @@ body {
   }
 
   .header-stats .port-pill,
-  .header-stats .stat-pill:nth-child(2) {
+  .header-stats .stat-pill:nth-child(3) {
     display: none;
   }
 
