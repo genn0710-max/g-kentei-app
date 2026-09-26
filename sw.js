@@ -1,10 +1,12 @@
-// G検定学習システム Service Worker v3.5 (「AI」発音修正 & スマホ上部セーフエリア完全対応)
-const CACHE_NAME = 'gkentei-v3.5';
+// G検定学習システム Service Worker v3.6 (暴走スキップ解消・AI発音完全対応・v3.6バッジ)
+const CACHE_NAME = 'gkentei-v3.6';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
   './style.css',
+  './style.css?v=3.6',
   './app.js',
+  './app.js?v=3.6',
   './manifest.json',
   './data/categories.json',
   './data/questions.json',

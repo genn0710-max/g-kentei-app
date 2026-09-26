@@ -270,13 +270,15 @@ function cleanTextForSpeech(text) {
     .replace(/【|】|■|○|×|★|▼|▲|●|◆|◇|◎/g, ' ')
     .replace(/第\s*(\d+)\s*問/g, 'だい $1 もん')
     .replace(/①/g, '1番、').replace(/②/g, '2番、').replace(/③/g, '3番、').replace(/④/g, '4番、')
-    // 「AI」を「エーアイ」に確実に発音させる（英単語内部のaiには誤爆しないよう単語境界チェック）
+    // 「XAI」および「AI」を「エーアイ」に確実に発音させる（英単語内部のaiには誤爆しないよう単語境界チェック）
+    .replace(/ＸＡＩ/gi, 'エックスエーアイ')
+    .replace(/(?<![a-zA-Z])XAI(?![a-zA-Z])/gi, 'エックスエーアイ')
     .replace(/ＡＩ/g, 'エーアイ')
     .replace(/(?<![a-zA-Z])AI(?![a-zA-Z])/g, 'エーアイ')
     .replace(/(?<![a-zA-Z])Ai(?![a-zA-Z])/g, 'エーアイ')
     // G検定・主要AI用語の読み仮名補正
     .replace(/(?<![a-zA-Z])G検定/g, 'ジーけんてい')
-    .replace(/(?<![a-zA-Z])ChatGPT(?![a-zA-Z])/g, 'チャットジーピーティー')
+    .replace(/(?<![a-zA-Z])ChatGPT(?![a-zA-Z])/gi, 'チャットジーピーティー')
     .replace(/(?<![a-zA-Z])GPT(?![a-zA-Z])/g, 'ジーピーティー')
     .replace(/(?<![a-zA-Z])CNN(?![a-zA-Z])/g, 'シーエヌエヌ')
     .replace(/(?<![a-zA-Z])RNN(?![a-zA-Z])/g, 'アールエヌエヌ')
@@ -450,10 +452,19 @@ async function initApp() {
   setupTabs();
   setupEventListeners();
 
-  // PWA Service Worker 登録（オフライン対応）
+  // PWA Service Worker 登録（オフライン対応 & 自動更新検知）
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js').then(reg => {
       console.log("PWA Service Worker registered:", reg.scope);
+      reg.addEventListener('updatefound', () => {
+        const newWorker = reg.installing;
+        if (!newWorker) return;
+        newWorker.addEventListener('statechange', () => {
+          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+            showToast("✨ 最新バージョン(v3.6)に自動更新されました！");
+          }
+        });
+      });
     }).catch(err => {
       console.log("PWA Service Worker registration skipped:", err);
     });
@@ -1254,27 +1265,7 @@ function updateWakeLockUI(active) {
 }
 
 function startAudioKeepAlive(itemTitle = "G検定 聞き流し学習") {
-  // 1. 無音オーディオ再生によるOSバックグラウンドスリープ防止
-  try {
-    if (!silentKeepAliveAudio) {
-      silentKeepAliveAudio = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA');
-      silentKeepAliveAudio.loop = true;
-    }
-    silentKeepAliveAudio.play().catch(() => {});
-  } catch (e) {
-    console.warn('Silent audio keep-alive warning:', e);
-  }
-
-  // 2. Web Speech APIタイムアウトバグ防止ハートビート（10秒間隔）
-  stopSpeechHeartbeat();
-  speechHeartbeatTimer = setInterval(() => {
-    if (window.speechSynthesis && window.speechSynthesis.speaking && !window.speechSynthesis.paused) {
-      window.speechSynthesis.pause();
-      window.speechSynthesis.resume();
-    }
-  }, 10000);
-
-  // 3. MediaSession API（ロック画面・イヤホン操作対応）
+  // MediaSession API（ロック画面・イヤホン操作対応）
   if ('mediaSession' in navigator) {
     try {
       navigator.mediaSession.metadata = new MediaMetadata({
@@ -1293,17 +1284,7 @@ function startAudioKeepAlive(itemTitle = "G検定 聞き流し学習") {
 }
 
 function stopAudioKeepAlive() {
-  if (silentKeepAliveAudio) {
-    silentKeepAliveAudio.pause();
-  }
-  stopSpeechHeartbeat();
-}
-
-function stopSpeechHeartbeat() {
-  if (speechHeartbeatTimer) {
-    clearInterval(speechHeartbeatTimer);
-    speechHeartbeatTimer = null;
-  }
+  // 必要に応じたクリーンアップ
 }
 
 // 画面再表示時にWakeLockを再取得
@@ -1523,6 +1504,8 @@ function togglePlayPauseAudioFlow() {
   }
 }
 
+let currentFlowUtterance = null;
+
 function stopAudioFlow() {
   releaseScreenWakeLock();
   stopAudioKeepAlive();
@@ -1531,6 +1514,13 @@ function stopAudioFlow() {
     clearTimeout(state.audioFlow.timerId);
     state.audioFlow.timerId = null;
   }
+
+  if (currentFlowUtterance) {
+    currentFlowUtterance.onend = null;
+    currentFlowUtterance.onerror = null;
+    currentFlowUtterance = null;
+  }
+
   if (state.tts.synth) {
     state.tts.synth.cancel();
   }
@@ -1552,6 +1542,13 @@ function playNextAudioFlow(isAuto = false) {
     clearTimeout(state.audioFlow.timerId);
     state.audioFlow.timerId = null;
   }
+
+  if (currentFlowUtterance) {
+    currentFlowUtterance.onend = null;
+    currentFlowUtterance.onerror = null;
+    currentFlowUtterance = null;
+  }
+
   if (state.tts.synth) {
     state.tts.synth.cancel();
   }
@@ -1583,6 +1580,13 @@ function playPrevAudioFlow() {
     clearTimeout(state.audioFlow.timerId);
     state.audioFlow.timerId = null;
   }
+
+  if (currentFlowUtterance) {
+    currentFlowUtterance.onend = null;
+    currentFlowUtterance.onerror = null;
+    currentFlowUtterance = null;
+  }
+
   if (state.tts.synth) {
     state.tts.synth.cancel();
   }
@@ -1598,32 +1602,74 @@ function playPrevAudioFlow() {
   }
 }
 
-function speakTextFlow(text, onEnd) {
+function speakTextFlow(text, targetIndex, onEnd) {
   if (!state.tts.synth) {
-    if (onEnd) onEnd();
+    if (onEnd && state.audioFlow.isPlaying && !state.audioFlow.isPaused && state.audioFlow.currentIndex === targetIndex) {
+      onEnd();
+    }
     return;
   }
 
+  // 以前のタイマーを停止
+  if (state.audioFlow.timerId) {
+    clearTimeout(state.audioFlow.timerId);
+    state.audioFlow.timerId = null;
+  }
+
+  // 既存の発話イベントハンドラを解除してからキャンセル（キャンセルによる誤発火を完全に遮断）
+  if (currentFlowUtterance) {
+    currentFlowUtterance.onend = null;
+    currentFlowUtterance.onerror = null;
+    currentFlowUtterance = null;
+  }
   state.tts.synth.cancel();
 
   const cleanText = cleanTextForSpeech(text);
+  if (!cleanText || cleanText.trim() === '') {
+    if (onEnd && state.audioFlow.isPlaying && !state.audioFlow.isPaused && state.audioFlow.currentIndex === targetIndex) {
+      onEnd();
+    }
+    return;
+  }
 
   const utterance = new SpeechSynthesisUtterance(cleanText);
+  currentFlowUtterance = utterance;
+
   if (state.tts.voice) utterance.voice = state.tts.voice;
   utterance.lang = 'ja-JP';
   utterance.rate = state.audioFlow.speed || 1.0;
   utterance.pitch = 1.0;
 
+  let hasEnded = false;
+
   utterance.onend = () => {
-    if (state.audioFlow.isPlaying && !state.audioFlow.isPaused) {
+    if (hasEnded) return;
+    hasEnded = true;
+    currentFlowUtterance = null;
+
+    if (state.audioFlow.isPlaying && !state.audioFlow.isPaused && state.audioFlow.currentIndex === targetIndex) {
       if (onEnd) onEnd();
     }
   };
 
   utterance.onerror = (e) => {
-    console.error("AudioFlow TTS Error:", e);
-    if (state.audioFlow.isPlaying && !state.audioFlow.isPaused) {
-      if (onEnd) onEnd();
+    if (hasEnded) return;
+    hasEnded = true;
+    currentFlowUtterance = null;
+
+    // スキップや一時停止等による正常な中断・キャンセルの場合は絶対に次へスキップしない
+    if (e.error === 'interrupted' || e.error === 'canceled') {
+      return;
+    }
+
+    console.warn("AudioFlow TTS Error:", e.error);
+    // エラー時の暴走を防ぐため、1.5秒待ってから次へ進む
+    if (state.audioFlow.isPlaying && !state.audioFlow.isPaused && state.audioFlow.currentIndex === targetIndex) {
+      state.audioFlow.timerId = setTimeout(() => {
+        if (state.audioFlow.isPlaying && !state.audioFlow.isPaused && state.audioFlow.currentIndex === targetIndex) {
+          if (onEnd) onEnd();
+        }
+      }, 1500);
     }
   };
 
@@ -1661,7 +1707,7 @@ function playAudioFlowCurrentItem() {
       });
     }
 
-    speakTextFlow(speech, () => {
+    speakTextFlow(speech, idx, () => {
       if (state.audioFlow.thinkingTime) {
         state.audioFlow.phase = 'thinking';
         elements.flowStepPhase.textContent = '⏱️ シンキングタイム（3秒間）...';
@@ -1685,7 +1731,7 @@ function playAudioFlowCurrentItem() {
 
     const speech = `用語、${current.term}。要約。${current.summary || ''}。詳細解説。${current.explanation || ''}。`;
 
-    speakTextFlow(speech, () => {
+    speakTextFlow(speech, idx, () => {
       state.audioFlow.timerId = setTimeout(() => {
         playNextAudioFlow(true);
       }, 1500);
@@ -1709,7 +1755,7 @@ function speakAnswerAndExplanation(current, idx) {
   const ansText = current.choices && current.choices[ansIdx] ? current.choices[ansIdx] : '';
   const speech = `正解は、${ansIdx + 1}番、${ansText}です。解説。${current.explanation || ''}。`;
 
-  speakTextFlow(speech, () => {
+  speakTextFlow(speech, idx, () => {
     state.audioFlow.timerId = setTimeout(() => {
       playNextAudioFlow(true);
     }, 2000);
