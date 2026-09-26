@@ -1097,6 +1097,74 @@ body {
   margin: 0 0 12px 0;
 }
 
+/* 選択肢リスト（聞き流しモード） */
+.flow-choices-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px 0 16px 0;
+}
+
+.flow-choice-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 14px;
+  background: #f8fafc;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.92rem;
+  line-height: 1.5;
+  color: #334155;
+  transition: all 0.25s ease;
+}
+
+.flow-choice-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #e2e8f0;
+  color: #475569;
+  font-size: 0.8rem;
+  font-weight: 700;
+  flex-shrink: 0;
+  margin-top: 1px;
+  transition: all 0.2s ease;
+}
+
+.flow-choice-text {
+  flex: 1;
+}
+
+.flow-choice-item.correct {
+  background: #ecfdf5;
+  border: 2px solid #10b981;
+  color: #065f46;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.15);
+}
+
+.flow-choice-item.correct .flow-choice-badge {
+  background: #10b981;
+  color: #ffffff;
+}
+
+.flow-choice-item.correct::after {
+  content: "✓ 正解";
+  margin-left: auto;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #059669;
+  background: #d1fae5;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  align-self: center;
+  white-space: nowrap;
+}
+
 .flow-item-answer-box {
   background: #ecfdf5;
   border: 1px solid #a7f3d0;
@@ -2191,6 +2259,23 @@ body {
     font-size: 0.95rem;
     line-height: 1.5;
     margin-bottom: 8px;
+  }
+
+  .flow-choices-list {
+    gap: 6px;
+    margin: 8px 0 10px 0;
+  }
+
+  .flow-choice-item {
+    padding: 8px 10px;
+    font-size: 0.85rem;
+    gap: 8px;
+  }
+
+  .flow-choice-badge {
+    width: 20px;
+    height: 20px;
+    font-size: 0.75rem;
   }
 
   .flow-item-answer-box {

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>G検定 完全対策システム (JDLAシラバス準拠・スタンドアローン)</title>
-  <link rel="stylesheet" href="style.css?v=3.6">
+  <link rel="stylesheet" href="style.css?v=3.7">
   <link rel="manifest" href="manifest.json">
   <link rel="icon" type="image/png" href="icon.png">
   <link rel="apple-touch-icon" href="icon.png">
@@ -27,7 +27,7 @@
         </div>
       </div>
       <div class="header-stats">
-        <div class="stat-pill version-pill" id="app-version-pill" title="アプリのバージョン">v3.6</div>
+        <div class="stat-pill version-pill" id="app-version-pill" title="アプリのバージョン">v3.7</div>
         <div class="stat-pill"><span class="stat-label">総問題数:</span> <strong id="header-q-count">--</strong> 問</div>
         <div class="stat-pill"><span class="stat-label">重要用語:</span> <strong id="header-t-count">--</strong> 語</div>
         <div class="stat-pill port-pill"><span class="pulse-dot"></span> <span id="header-port">稼働中</span></div>
@@ -368,6 +368,8 @@
             <span class="flow-step-phase" id="flow-step-phase">「聞き流しを開始」ボタンを押すと音声学習がスタートします</span>
           </div>
           <h3 class="flow-item-title" id="flow-item-title">各分野の問題と詳細解説、または重要用語が自動で順番に読み上げられます。</h3>
+          <!-- 選択肢一覧 -->
+          <div class="flow-choices-list" id="flow-choices-list"></div>
           <div class="flow-item-answer-box hidden" id="flow-item-answer-box">
             <span class="flow-ans-label">正解:</span>
             <span class="flow-ans-text" id="flow-item-answer-text"></span>
@@ -540,6 +542,6 @@
   <!-- トースト通知 -->
   <div id="toast" class="toast hidden"></div>
 
-  <script src="app.js?v=3.6"></script>
+  <script src="app.js?v=3.7"></script>
 </body>
 </html>
