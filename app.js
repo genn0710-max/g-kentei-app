@@ -263,6 +263,46 @@ function initTTS() {
   }
 }
 
+function cleanTextForSpeech(text) {
+  if (!text || typeof text !== 'string') return '';
+
+  let clean = text
+    .replace(/【|】|■|○|×|★|▼|▲|●|◆|◇|◎/g, ' ')
+    .replace(/第\s*(\d+)\s*問/g, 'だい $1 もん')
+    .replace(/①/g, '1番、').replace(/②/g, '2番、').replace(/③/g, '3番、').replace(/④/g, '4番、')
+    // 「AI」を「エーアイ」に確実に発音させる（英単語内部のaiには誤爆しないよう単語境界チェック）
+    .replace(/ＡＩ/g, 'エーアイ')
+    .replace(/(?<![a-zA-Z])AI(?![a-zA-Z])/g, 'エーアイ')
+    .replace(/(?<![a-zA-Z])Ai(?![a-zA-Z])/g, 'エーアイ')
+    // G検定・主要AI用語の読み仮名補正
+    .replace(/(?<![a-zA-Z])G検定/g, 'ジーけんてい')
+    .replace(/(?<![a-zA-Z])ChatGPT(?![a-zA-Z])/g, 'チャットジーピーティー')
+    .replace(/(?<![a-zA-Z])GPT(?![a-zA-Z])/g, 'ジーピーティー')
+    .replace(/(?<![a-zA-Z])CNN(?![a-zA-Z])/g, 'シーエヌエヌ')
+    .replace(/(?<![a-zA-Z])RNN(?![a-zA-Z])/g, 'アールエヌエヌ')
+    .replace(/(?<![a-zA-Z])DNN(?![a-zA-Z])/g, 'ディーエヌエヌ')
+    .replace(/(?<![a-zA-Z])ANN(?![a-zA-Z])/g, 'エーエヌエヌ')
+    .replace(/(?<![a-zA-Z])LLM(?![a-zA-Z])/g, 'エルエルエム')
+    .replace(/(?<![a-zA-Z])NLP(?![a-zA-Z])/g, 'エヌエルピー')
+    .replace(/(?<![a-zA-Z])GPU(?![a-zA-Z])/g, 'ジーピーユー')
+    .replace(/(?<![a-zA-Z])CPU(?![a-zA-Z])/g, 'シーピーユー')
+    .replace(/(?<![a-zA-Z])TPU(?![a-zA-Z])/g, 'ティーピーユー')
+    .replace(/(?<![a-zA-Z])SVM(?![a-zA-Z])/g, 'エスブイエム')
+    .replace(/(?<![a-zA-Z])SGD(?![a-zA-Z])/g, 'エスジーディー')
+    .replace(/(?<![a-zA-Z])IoT(?![a-zA-Z])/g, 'アイオーティー')
+    .replace(/(?<![a-zA-Z])DX(?![a-zA-Z])/g, 'ディーエックス')
+    .replace(/(?<![a-zA-Z])DQN(?![a-zA-Z])/g, 'ディーキューエヌ')
+    .replace(/(?<![a-zA-Z])VAE(?![a-zA-Z])/g, 'ブイエーイー')
+    .replace(/(?<![a-zA-Z])GAN(?![a-zA-Z])/g, 'ガン')
+    .replace(/(?<![a-zA-Z])AGI(?![a-zA-Z])/g, 'エージーアイ')
+    .replace(/(?<![a-zA-Z])BERT(?![a-zA-Z])/g, 'バート')
+    .replace(/(?<![a-zA-Z])RL(?![a-zA-Z])/g, 'アールエル')
+    .replace(/(?<![a-zA-Z])ML(?![a-zA-Z])/g, 'エムエル')
+    .replace(/\n+/g, '。 ');
+
+  return clean;
+}
+
 function speakText(text, title = "音声読み上げ中...") {
   if (!state.tts.synth) return;
 
@@ -271,11 +311,8 @@ function speakText(text, title = "音声読み上げ中...") {
 
   if (!text || text.trim() === "") return;
 
-  // 読み上げテキストのクリーンアップ（記号などの調整）
-  const cleanText = text
-    .replace(/【|】|■|○|×|★/g, ' ')
-    .replace(/第\s*(\d+)\s*問/g, 'だい $1 もん')
-    .replace(/\n+/g, '。 ');
+  // 読み上げテキストのクリーンアップ（記号・専門用語発音補正）
+  const cleanText = cleanTextForSpeech(text);
 
   const utterance = new SpeechSynthesisUtterance(cleanText);
   if (state.tts.voice) utterance.voice = state.tts.voice;
@@ -1569,10 +1606,7 @@ function speakTextFlow(text, onEnd) {
 
   state.tts.synth.cancel();
 
-  const cleanText = text
-    .replace(/【|】|■|○|×|★/g, ' ')
-    .replace(/第\s*(\d+)\s*問/g, 'だい $1 もん')
-    .replace(/\n+/g, '。 ');
+  const cleanText = cleanTextForSpeech(text);
 
   const utterance = new SpeechSynthesisUtterance(cleanText);
   if (state.tts.voice) utterance.voice = state.tts.voice;
