@@ -31,7 +31,7 @@ body {
   color: var(--text-main);
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
-  padding-bottom: 70px; /* 音声バー用の余白 */
+  padding-bottom: calc(75px + env(safe-area-inset-bottom, 0px)); /* 音声バー & ホームバー用の余白 */
 }
 
 /* ヘッダー */
@@ -41,6 +41,9 @@ body {
   position: sticky;
   top: 0;
   z-index: 100;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
 }
 
 .header-container {
@@ -1591,26 +1594,32 @@ body {
   }
 
   body.in-exam .app-main {
-    margin: 4px auto 60px auto !important;
-    padding: 0 6px !important;
+    margin: 0 auto 60px auto !important;
+    padding: max(calc(env(safe-area-inset-top, 0px) + 6px), 44px) 6px 0 6px !important;
   }
 
-  /* ヘッダー・ナビゲーション (スマホではstickyを解除してスクロール時に画面を圧迫しない) */
+  /* ヘッダー・ナビゲーション (スマホの時計・ノッチ・Dynamic Island・カメラ穴との被りを完全解消するセーフエリア確保) */
   .app-header {
     position: relative !important;
     top: auto !important;
     z-index: 10;
     background: #ffffff;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    padding-top: max(calc(env(safe-area-inset-top, 0px) + 6px), 48px) !important;
+    padding-left: max(env(safe-area-inset-left, 0px), 8px);
+    padding-right: max(env(safe-area-inset-right, 0px), 8px);
   }
 
   .header-container {
-    padding: 0.5rem 0.75rem;
-    gap: 6px;
+    padding: 0.6rem 0.85rem 0.4rem 0.85rem;
+    gap: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
   }
 
   .brand h1 {
-    font-size: 0.92rem;
+    font-size: 0.95rem;
     white-space: nowrap;
   }
 
@@ -1926,7 +1935,7 @@ body {
 
   /* 音声コントロールバー (スマホ常設フローティング) */
   .audio-bar {
-    bottom: 12px;
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
     left: 12px;
     right: 12px;
     width: auto;

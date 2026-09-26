@@ -1,5 +1,5 @@
-// G検定学習システム Service Worker v3.4 (聞き流しスリープ防止・常時点灯・キープアライブ対応)
-const CACHE_NAME = 'gkentei-v3.4';
+// G検定学習システム Service Worker v3.5 (「AI」発音修正 & スマホ上部セーフエリア完全対応)
+const CACHE_NAME = 'gkentei-v3.5';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
