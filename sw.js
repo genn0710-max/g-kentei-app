@@ -1,12 +1,12 @@
-// G検定学習システム Service Worker v3.8 (問題読み上げ時の正解非表示・v3.8バッジ)
-const CACHE_NAME = 'gkentei-v3.8';
+// G検定学習システム Service Worker v3.9 (読み上げ中の該当箇所表示＆自動スクロール・v3.9バッジ)
+const CACHE_NAME = 'gkentei-v3.9';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
   './style.css',
-  './style.css?v=3.8',
+  './style.css?v=3.9',
   './app.js',
-  './app.js?v=3.8',
+  './app.js?v=3.9',
   './manifest.json',
   './data/categories.json',
   './data/questions.json',

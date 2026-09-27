@@ -462,7 +462,7 @@ async function initApp() {
         if (!newWorker) return;
         newWorker.addEventListener('statechange', () => {
           if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-            showToast("✨ 最新バージョン(v3.8)に自動更新されました！");
+            showToast("✨ 最新バージョン(v3.9)に自動更新されました！");
           }
         });
       });
@@ -768,6 +768,11 @@ function speakCurrentExamQuestion() {
   const q = questions[currentIndex];
   if (!q) return;
 
+  const examView = document.getElementById('exam-play-view');
+  if (examView) {
+    examView.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
   let textToRead = `第 ${currentIndex + 1} 問。分野、${q.category}。問題文。${q.question}。`;
   q.choices.forEach((c, i) => {
     textToRead += `選択肢 ${i + 1}、${c}。`;
@@ -986,6 +991,11 @@ function speakCurrentDrillQuestion() {
   const { currentIndex, questions } = state.drill;
   const q = questions[currentIndex];
   if (!q) return;
+
+  const drillCard = document.getElementById('drill-card') || elements.drillChoicesContainer;
+  if (drillCard) {
+    drillCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
 
   let textToRead = `分野、${q.category}。問題文。${q.question}。`;
   q.choices.forEach((c, i) => {
@@ -1541,6 +1551,53 @@ function togglePlayPauseAudioFlow() {
 
 let currentFlowUtterance = null;
 
+// 読み上げ中の該当箇所ハイライト＆自動スクロール
+function highlightFlowElement(targetType, choiceIndex = null) {
+  clearFlowHighlights();
+
+  let elToScroll = null;
+
+  if (targetType === 'question' || targetType === 'term-title') {
+    if (elements.flowItemTitle) {
+      elements.flowItemTitle.classList.add('flow-reading-active');
+      elToScroll = elements.flowCurrentCard || elements.flowItemTitle;
+    }
+  } else if (targetType === 'choice' && choiceIndex !== null) {
+    if (elements.flowChoicesList) {
+      const choiceItems = elements.flowChoicesList.querySelectorAll('.flow-choice-item');
+      if (choiceItems[choiceIndex]) {
+        choiceItems[choiceIndex].classList.add('flow-reading-active');
+        elToScroll = choiceItems[choiceIndex];
+      }
+    }
+  } else if (targetType === 'answer' || targetType === 'term-summary') {
+    if (elements.flowItemAnswerBox) {
+      elements.flowItemAnswerBox.classList.add('flow-reading-active');
+      elToScroll = elements.flowItemAnswerBox;
+    }
+  } else if (targetType === 'explanation' || targetType === 'term-explanation') {
+    if (elements.flowItemExplanationBox) {
+      elements.flowItemExplanationBox.classList.add('flow-reading-active');
+      elToScroll = elements.flowItemExplanationBox;
+    }
+  }
+
+  // 自動スクロール（画面外にある場合はスムーズに画面内へスクロール）
+  if (elToScroll) {
+    elToScroll.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+}
+
+function clearFlowHighlights() {
+  if (elements.flowItemTitle) elements.flowItemTitle.classList.remove('flow-reading-active');
+  if (elements.flowItemAnswerBox) elements.flowItemAnswerBox.classList.remove('flow-reading-active');
+  if (elements.flowItemExplanationBox) elements.flowItemExplanationBox.classList.remove('flow-reading-active');
+  if (elements.flowChoicesList) {
+    const choiceItems = elements.flowChoicesList.querySelectorAll('.flow-choice-item');
+    choiceItems.forEach(item => item.classList.remove('flow-reading-active'));
+  }
+}
+
 function stopAudioFlow() {
   releaseScreenWakeLock();
   stopAudioKeepAlive();
@@ -1560,6 +1617,7 @@ function stopAudioFlow() {
     state.tts.synth.cancel();
   }
 
+  clearFlowHighlights();
   state.audioFlow.isPlaying = false;
   state.audioFlow.isPaused = false;
   state.audioFlow.phase = 'idle';
@@ -1725,6 +1783,7 @@ function playAudioFlowCurrentItem() {
 
   // カードを更新（phase='question'なので、正解ハイライト・正解ボックス・解説ボックスが完全に非表示になる）
   updateAudioFlowCard();
+  clearFlowHighlights();
 
   // スリープ防止 & キープアライブ起動
   requestScreenWakeLock();
@@ -1738,44 +1797,96 @@ function playAudioFlowCurrentItem() {
   if (state.audioFlow.mode === 'questions') {
     elements.flowStepPhase.textContent = '🔊 問題文を読み上げ中...';
 
-    let speech = `第 ${idx + 1} 問。${current.question}。`;
-    if (current.choices && current.choices.length > 0) {
-      speech += ' 選択肢。';
-      current.choices.forEach((c, i) => {
-        speech += ` ${i + 1} 番、${c}。`;
-      });
-    }
+    // 1. 問題文をハイライト＆自動スクロール＆読み上げ
+    highlightFlowElement('question');
+    const qSpeech = `第 ${idx + 1} 問。${current.question}。`;
 
-    speakTextFlow(speech, idx, () => {
-      if (state.audioFlow.thinkingTime) {
-        state.audioFlow.phase = 'thinking';
-        updateAudioFlowCard(); // 思考中も正解・解説は非表示を維持
-        elements.flowStepPhase.textContent = '⏱️ シンキングタイム（3秒間）...';
-        elements.flowStatusBadge.textContent = '思考タイム ⏱️';
-        elements.flowStatusBadge.className = 'flow-status-badge thinking';
+    speakTextFlow(qSpeech, idx, () => {
+      // 2. 選択肢を1つずつハイライト＆自動スクロールしながら順番に読み上げ
+      const choices = current.choices || [];
+      if (choices.length > 0) {
+        let choiceIdx = 0;
 
-        state.audioFlow.timerId = setTimeout(() => {
-          speakAnswerAndExplanation(current, idx);
-        }, 3000);
+        function readNextChoice() {
+          if (!state.audioFlow.isPlaying || state.audioFlow.isPaused || state.audioFlow.currentIndex !== idx) {
+            return;
+          }
+          if (choiceIdx < choices.length) {
+            highlightFlowElement('choice', choiceIdx);
+            elements.flowStepPhase.textContent = `🔊 選択肢 ${choiceIdx + 1} を読み上げ中...`;
+            const prefix = choiceIdx === 0 ? '選択肢。' : '';
+            const cSpeech = `${prefix}${choiceIdx + 1} 番、${choices[choiceIdx]}。`;
+            choiceIdx++;
+            speakTextFlow(cSpeech, idx, () => {
+              readNextChoice();
+            });
+          } else {
+            // 全選択肢の読み上げ終了 -> シンキングタイムへ
+            clearFlowHighlights();
+            startThinkingPhase(current, idx);
+          }
+        }
+
+        readNextChoice();
       } else {
-        speakAnswerAndExplanation(current, idx);
+        // 選択肢がない場合 -> シンキングタイムへ
+        clearFlowHighlights();
+        startThinkingPhase(current, idx);
       }
     });
 
   } else {
-    // 用語モード
+    // 重要用語モード
     state.audioFlow.phase = 'term';
-    elements.flowStepPhase.textContent = '📖 用語と詳細解説を読み上げ中...';
-    elements.flowItemAnswerBox.classList.remove('hidden');
-    elements.flowItemExplanationBox.classList.remove('hidden');
+    elements.flowStepPhase.textContent = '📖 用語名を読み上げ中...';
 
-    const speech = `用語、${current.term}。要約。${current.summary || ''}。詳細解説。${current.explanation || ''}。`;
+    // 1. 用語名をハイライト＆自動スクロール＆読み上げ
+    highlightFlowElement('term-title');
+    const termSpeech = `用語、${current.term}。`;
 
-    speakTextFlow(speech, idx, () => {
-      state.audioFlow.timerId = setTimeout(() => {
-        playNextAudioFlow(true);
-      }, 1500);
+    speakTextFlow(termSpeech, idx, () => {
+      if (!state.audioFlow.isPlaying || state.audioFlow.isPaused || state.audioFlow.currentIndex !== idx) return;
+
+      // 2. 要約をハイライト＆自動スクロール＆読み上げ
+      elements.flowStepPhase.textContent = '📖 要約を読み上げ中...';
+      highlightFlowElement('term-summary');
+      const summarySpeech = `要約。${current.summary || ''}。`;
+
+      speakTextFlow(summarySpeech, idx, () => {
+        if (!state.audioFlow.isPlaying || state.audioFlow.isPaused || state.audioFlow.currentIndex !== idx) return;
+
+        // 3. 詳細解説をハイライト＆自動スクロール＆読み上げ
+        elements.flowStepPhase.textContent = '📖 詳細解説を読み上げ中...';
+        highlightFlowElement('term-explanation');
+        const expSpeech = `詳細解説。${current.explanation || ''}。`;
+
+        speakTextFlow(expSpeech, idx, () => {
+          clearFlowHighlights();
+          state.audioFlow.timerId = setTimeout(() => {
+            playNextAudioFlow(true);
+          }, 1500);
+        });
+      });
     });
+  }
+}
+
+function startThinkingPhase(current, idx) {
+  if (!state.audioFlow.isPlaying || state.audioFlow.isPaused || state.audioFlow.currentIndex !== idx) return;
+
+  if (state.audioFlow.thinkingTime) {
+    state.audioFlow.phase = 'thinking';
+    updateAudioFlowCard();
+    clearFlowHighlights();
+    elements.flowStepPhase.textContent = '⏱️ シンキングタイム（3秒間）...';
+    elements.flowStatusBadge.textContent = '思考タイム ⏱️';
+    elements.flowStatusBadge.className = 'flow-status-badge thinking';
+
+    state.audioFlow.timerId = setTimeout(() => {
+      speakAnswerAndExplanation(current, idx);
+    }, 3000);
+  } else {
+    speakAnswerAndExplanation(current, idx);
   }
 }
 
@@ -1785,19 +1896,32 @@ function speakAnswerAndExplanation(current, idx) {
   }
 
   state.audioFlow.phase = 'explanation';
-  elements.flowStepPhase.textContent = '💡 正解と詳細解説を読み上げ中...';
+  elements.flowStepPhase.textContent = '💡 正解を発表中...';
   elements.flowStatusBadge.textContent = '正解・解説 🔊';
   elements.flowStatusBadge.className = 'flow-status-badge playing';
   updateAudioFlowCard();
 
   const ansIdx = current.answer !== undefined ? current.answer : 0;
   const ansText = current.choices && current.choices[ansIdx] ? current.choices[ansIdx] : '';
-  const speech = `正解は、${ansIdx + 1}番、${ansText}です。解説。${current.explanation || ''}。`;
 
-  speakTextFlow(speech, idx, () => {
-    state.audioFlow.timerId = setTimeout(() => {
-      playNextAudioFlow(true);
-    }, 2000);
+  // 1. 正解のハイライト（正解ボックス ＆ 正解選択肢）＆自動スクロール
+  highlightFlowElement('answer');
+  const ansSpeech = `正解は、${ansIdx + 1}番、${ansText}です。`;
+
+  speakTextFlow(ansSpeech, idx, () => {
+    if (!state.audioFlow.isPlaying || state.audioFlow.isPaused || state.audioFlow.currentIndex !== idx) return;
+
+    // 2. 詳細解説のハイライト＆自動スクロール＆読み上げ
+    elements.flowStepPhase.textContent = '💡 詳細解説を読み上げ中...';
+    highlightFlowElement('explanation');
+    const expSpeech = `解説。${current.explanation || ''}。`;
+
+    speakTextFlow(expSpeech, idx, () => {
+      clearFlowHighlights();
+      state.audioFlow.timerId = setTimeout(() => {
+        playNextAudioFlow(true);
+      }, 2000);
+    });
   });
 }
 

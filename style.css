@@ -1211,6 +1211,95 @@ body {
   white-space: pre-wrap;
 }
 
+/* 自動スクロール時のヘッダー重なり防止マージン */
+.flow-current-card,
+.flow-item-title,
+.flow-choice-item,
+.flow-item-answer-box,
+.flow-item-explanation-box,
+.exam-current-question-card,
+.drill-card {
+  scroll-margin-top: 85px;
+  scroll-margin-bottom: 30px;
+}
+
+/* 読み上げ中ハイライト (Speech Active) */
+.flow-reading-active {
+  position: relative;
+  transition: all 0.25s ease-in-out;
+}
+
+/* 問題文・用語名 読み上げ中 */
+.flow-item-title.flow-reading-active {
+  background: #eff6ff !important;
+  border-left: 5px solid var(--primary) !important;
+  padding: 10px 14px !important;
+  border-radius: 8px !important;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15) !important;
+}
+
+/* 選択肢 読み上げ中 */
+.flow-choice-item.flow-reading-active {
+  background: #eff6ff !important;
+  border: 2px solid #2563eb !important;
+  color: #1e3a8a !important;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2) !important;
+  transform: translateX(4px);
+}
+
+.flow-choice-item.flow-reading-active .flow-choice-badge {
+  background: #2563eb !important;
+  color: #ffffff !important;
+  transform: scale(1.08);
+}
+
+.flow-choice-item.flow-reading-active::after {
+  content: "🔊 読上中";
+  margin-left: auto;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #1d4ed8;
+  background: #dbeafe;
+  padding: 2px 7px;
+  border-radius: 9999px;
+  align-self: center;
+  white-space: nowrap;
+  animation: pulseSpeaking 1.5s infinite ease-in-out;
+}
+
+@keyframes pulseSpeaking {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(0.96); }
+}
+
+/* 正解発表時の正解選択肢ハイライト (正解 + 読上中) */
+.flow-choice-item.correct.flow-reading-active {
+  background: #ecfdf5 !important;
+  border: 2px solid #10b981 !important;
+  color: #065f46 !important;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.25) !important;
+}
+
+.flow-choice-item.correct.flow-reading-active::after {
+  content: "✓ 🔊 正解";
+  background: #a7f3d0;
+  color: #047857;
+}
+
+/* 正解ボックス / 要約ボックス 読み上げ中 */
+.flow-item-answer-box.flow-reading-active {
+  border: 2px solid #10b981 !important;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.22) !important;
+  background: #f0fdf4 !important;
+}
+
+/* 解説ボックス 読み上げ中 */
+.flow-item-explanation-box.flow-reading-active {
+  border: 2px solid #2563eb !important;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2) !important;
+  background: #f8fafc !important;
+}
+
 /* プレイリスト */
 .flow-playlist-wrapper {
   background: #ffffff;
@@ -2276,6 +2365,15 @@ body {
     width: 20px;
     height: 20px;
     font-size: 0.75rem;
+  }
+
+  .flow-choice-item.flow-reading-active {
+    transform: translateX(2px);
+  }
+
+  .flow-choice-item.flow-reading-active::after {
+    font-size: 0.68rem;
+    padding: 1px 6px;
   }
 
   .flow-item-answer-box {
