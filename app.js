@@ -1,2189 +1,2046 @@
-/**
- * G検定対策アプリ フロントエンドロジック (音声読み上げ & 用語辞書連動対応版)
- */
+const { createApp, ref, computed, onMounted, onUnmounted, watch } = Vue;
 
-// グローバル状態
-const state = {
-  categories: [],
-  questions: [],
-  terms: [],
-  serverInfo: null,
-  
-  // 模擬試験状態
-  exam: {
-    active: false,
-    questions: [],
-    currentIndex: 0,
-    answers: {}, // { index: selectedChoiceIndex }
-    flags: {},   // { index: true/false }
-    timerInterval: null,
-    remainingSeconds: 0,
-    totalSeconds: 0,
-    startTime: null,
-    elapsedSeconds: 0,
-    paceSeconds: 40,
-    paceRemaining: 40,
-    paceInterval: null
-  },
+const DB_NAME = 'ArchConstructionCBT_DB_v4';
+const DB_VERSION = 1;
+const STORE_NAME = 'questions';
 
-  // 分野別ドリル状態
-  drill: {
-    category: null,
-    questions: [],
-    currentIndex: 0,
-    hasAnswered: false
-  },
-
-  // 音声読み上げ（TTS）状態
-  tts: {
-    synth: window.speechSynthesis,
-    voice: null,
-    rate: 1.0,
-    isSpeaking: false,
-    isPaused: false,
-    queue: [],
-    currentIndex: 0
-  },
-
-  // 各章・重要用語 聞き流しモード状態
-  audioFlow: {
-    mode: 'questions', // 'questions' | 'terms'
-    category: 'all',
-    items: [],
-    currentIndex: 0,
-    isPlaying: false,
-    isPaused: false,
-    thinkingTime: true,
-    repeat: true,
-    speed: 1.0,
-    preventSleep: true, // スリープ・自動消灯防止 (Wake Lock)
-    phase: 'idle', // 'idle' | 'question' | 'thinking' | 'explanation' | 'term'
-    timerId: null
-  },
-
-  // 選択中の用語モーダルデータ
-  activeModalTerm: null
-};
-
-// DOM要素
-const elements = {
-  headerQCount: document.getElementById('header-q-count'),
-  headerTCount: document.getElementById('header-t-count'),
-  headerPort: document.getElementById('header-port'),
-  navTabs: document.querySelectorAll('.nav-tab'),
-  tabPanes: document.querySelectorAll('.tab-pane'),
-  toast: document.getElementById('toast'),
-
-  // 音声コントロールバー
-  audioBar: document.getElementById('audio-control-bar'),
-  audioReadingTitle: document.getElementById('audio-reading-title'),
-  btnAudioPlayPause: document.getElementById('btn-audio-play-pause'),
-  btnAudioStop: document.getElementById('btn-audio-stop'),
-  audioSpeedSelect: document.getElementById('audio-speed-select'),
-
-  // 用語モーダル
-  termModal: document.getElementById('term-modal'),
-  modalTermTitle: document.getElementById('modal-term-title'),
-  modalTermStars: document.getElementById('modal-term-stars'),
-  modalTermCategory: document.getElementById('modal-term-category'),
-  modalTermSummary: document.getElementById('modal-term-summary'),
-  modalTermDetails: document.getElementById('modal-term-details'),
-  modalBtnSpeak: document.getElementById('modal-btn-speak'),
-  modalBtnClose: document.getElementById('modal-btn-close'),
-  modalBtnOk: document.getElementById('modal-btn-ok'),
-
-  // 模試要素
-  examStartView: document.getElementById('exam-start-view'),
-  examPlayView: document.getElementById('exam-play-view'),
-  examResultView: document.getElementById('exam-result-view'),
-  btnStartExam: document.getElementById('btn-start-exam'),
-  examCountSelect: document.getElementById('exam-count-select'),
-  examTimerToggle: document.getElementById('exam-timer-toggle'),
-  examQProgress: document.getElementById('exam-q-progress'),
-  examCurrentCategory: document.getElementById('exam-current-category'),
-  examTimerBox: document.getElementById('exam-timer-box'),
-  examTimerText: document.getElementById('exam-timer-text'),
-  perQuestionTimerBox: document.getElementById('per-question-timer-box'),
-  paceSecondsText: document.getElementById('pace-seconds-text'),
-  paceProgressBar: document.getElementById('pace-progress-bar'),
-  btnSpeakExamQ: document.getElementById('btn-speak-exam-q'),
-  btnFlagToggle: document.getElementById('btn-flag-toggle'),
-  btnFinishExam: document.getElementById('btn-finish-exam'),
-  btnAbortExam: document.getElementById('btn-abort-exam'),
-  examQuestionText: document.getElementById('exam-question-text'),
-  examChoicesContainer: document.getElementById('exam-choices-container'),
-  btnExamPrev: document.getElementById('btn-exam-prev'),
-  btnExamNext: document.getElementById('btn-exam-next'),
-  examPaletteGrid: document.getElementById('exam-palette-grid'),
-  btnTogglePalette: document.getElementById('btn-toggle-palette'),
-  paletteCollapsibleContent: document.getElementById('palette-collapsible-content'),
-  paletteChevron: document.getElementById('palette-chevron'),
-  paletteAnsweredCount: document.getElementById('palette-answered-count'),
-  paletteCountLabel: document.getElementById('palette-count-label'),
-  resultScorePercent: document.getElementById('result-score-percent'),
-  resultScoreFraction: document.getElementById('result-score-fraction'),
-  resultVerdict: document.getElementById('result-verdict'),
-  resultFeedback: document.getElementById('result-feedback'),
-  resultTimeTaken: document.getElementById('result-time-taken'),
-  resultCorrectCount: document.getElementById('result-correct-count'),
-  resultWrongCount: document.getElementById('result-wrong-count'),
-  btnExamRestart: document.getElementById('btn-exam-restart'),
-  btnFilterMistakes: document.getElementById('btn-filter-mistakes'),
-  btnShowAllReviews: document.getElementById('btn-show-all-reviews'),
-  btnSpeakAllExplanations: document.getElementById('btn-speak-all-explanations'),
-  examReviewContainer: document.getElementById('exam-review-container'),
-
-  // ドリル要素
-  drillCategoryGrid: document.getElementById('drill-category-grid'),
-  drillActiveView: document.getElementById('drill-active-view'),
-  btnDrillBack: document.getElementById('btn-drill-back'),
-  drillProgressText: document.getElementById('drill-progress-text'),
-  drillCategoryName: document.getElementById('drill-category-name'),
-  btnSpeakDrillQ: document.getElementById('btn-speak-drill-q'),
-  drillQuestionText: document.getElementById('drill-question-text'),
-  drillChoicesContainer: document.getElementById('drill-choices-container'),
-  drillExplanationBox: document.getElementById('drill-explanation-box'),
-  drillResultBanner: document.getElementById('drill-result-banner'),
-  btnSpeakDrillExp: document.getElementById('btn-speak-drill-exp'),
-  drillExplanationText: document.getElementById('drill-explanation-text'),
-  btnDrillNext: document.getElementById('btn-drill-next'),
-
-  // 聞き流しモード要素
-  flowModeBtnQuestions: document.getElementById('btn-flow-mode-questions'),
-  flowModeBtnTerms: document.getElementById('btn-flow-mode-terms'),
-  flowCategorySelect: document.getElementById('flow-category-select'),
-  flowThinkingToggle: document.getElementById('flow-thinking-toggle'),
-  flowRepeatToggle: document.getElementById('flow-repeat-toggle'),
-  flowWakeLockToggle: document.getElementById('flow-wakelock-toggle'),
-  flowWakeLockPill: document.getElementById('flow-wakelock-pill'),
-  flowSpeedSelect: document.getElementById('flow-speed-select'),
-  flowStatusBadge: document.getElementById('flow-status-badge'),
-  flowCounterText: document.getElementById('flow-counter-text'),
-  flowCurrentCategoryPill: document.getElementById('flow-current-category-pill'),
-  flowProgressBarFill: document.getElementById('flow-progress-bar-fill'),
-  btnFlowPrev: document.getElementById('btn-flow-prev'),
-  btnFlowPlayPause: document.getElementById('btn-flow-play-pause'),
-  btnFlowNext: document.getElementById('btn-flow-next'),
-  btnFlowStop: document.getElementById('btn-flow-stop'),
-  flowCurrentCard: document.getElementById('flow-current-card'),
-  flowItemNum: document.getElementById('flow-item-num'),
-  flowStepPhase: document.getElementById('flow-step-phase'),
-  flowItemTitle: document.getElementById('flow-item-title'),
-  flowChoicesList: document.getElementById('flow-choices-list'),
-  flowItemAnswerBox: document.getElementById('flow-item-answer-box'),
-  flowItemAnswerText: document.getElementById('flow-item-answer-text'),
-  flowItemExplanationBox: document.getElementById('flow-item-explanation-box'),
-  flowItemExplanationText: document.getElementById('flow-item-explanation-text'),
-  flowListCount: document.getElementById('flow-list-count'),
-  flowPlaylist: document.getElementById('flow-playlist'),
-  btnStartTermsFlow: document.getElementById('btn-start-terms-flow'),
-
-  // 用語集要素
-  termsContainer: document.getElementById('terms-container'),
-  termsSearchInput: document.getElementById('terms-search-input'),
-  termsCategoryFilter: document.getElementById('terms-category-filter'),
-
-  // 管理画面要素
-  formCategory: document.getElementById('form-category'),
-  formSource: document.getElementById('form-source'),
-  formQuestion: document.getElementById('form-question'),
-  choiceInputs: [
-    document.getElementById('choice-0'),
-    document.getElementById('choice-1'),
-    document.getElementById('choice-2'),
-    document.getElementById('choice-3')
-  ],
-  formExplanation: document.getElementById('form-explanation'),
-  addQuestionForm: document.getElementById('add-question-form'),
-  adminTableCount: document.getElementById('admin-table-count'),
-  adminQuestionsTbody: document.getElementById('admin-questions-tbody'),
-  adminSearchInput: document.getElementById('admin-search-input')
-};
-
-// ==========================================
-// ユーティリティ
-// ==========================================
-function showToast(message, duration = 3000) {
-  elements.toast.textContent = message;
-  elements.toast.classList.remove('hidden');
-  setTimeout(() => {
-    elements.toast.classList.add('hidden');
-  }, duration);
-}
-
-function shuffleArray(array) {
-  const arr = [...array];
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-  return arr;
-}
-
-function formatSeconds(sec) {
-  if (sec < 0) sec = 0;
-  const h = Math.floor(sec / 3600);
-  const m = Math.floor((sec % 3600) / 60);
-  const s = sec % 60;
-  if (h > 0) {
-    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-  }
-  return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-}
-
-function escapeHtml(str) {
-  if (!str) return '';
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
-}
-
-// ==========================================
-// 音声読み上げ（TTS）エンジン
-// ==========================================
-function initTTS() {
-  if (!('speechSynthesis' in window)) {
-    console.warn("このブラウザは音声合成に対応していません。");
-    return;
-  }
-
-  function pickJapaneseVoice() {
-    const voices = state.tts.synth.getVoices();
-    const jaVoice = voices.find(v => v.lang.includes('ja') || v.lang.includes('JP'));
-    if (jaVoice) {
-      state.tts.voice = jaVoice;
-    }
-  }
-
-  pickJapaneseVoice();
-  if (speechSynthesis.onvoiceschanged !== undefined) {
-    speechSynthesis.onvoiceschanged = pickJapaneseVoice;
-  }
-}
-
-function cleanTextForSpeech(text) {
-  if (!text || typeof text !== 'string') return '';
-
-  let clean = text
-    .replace(/【|】|■|○|×|★|▼|▲|●|◆|◇|◎/g, ' ')
-    .replace(/第\s*(\d+)\s*問/g, 'だい $1 もん')
-    .replace(/①/g, '1番、').replace(/②/g, '2番、').replace(/③/g, '3番、').replace(/④/g, '4番、')
-    // 「XAI」および「AI」を「エーアイ」に確実に発音させる（英単語内部のaiには誤爆しないよう単語境界チェック）
-    .replace(/ＸＡＩ/gi, 'エックスエーアイ')
-    .replace(/(?<![a-zA-Z])XAI(?![a-zA-Z])/gi, 'エックスエーアイ')
-    .replace(/ＡＩ/g, 'エーアイ')
-    .replace(/(?<![a-zA-Z])AI(?![a-zA-Z])/g, 'エーアイ')
-    .replace(/(?<![a-zA-Z])Ai(?![a-zA-Z])/g, 'エーアイ')
-    // G検定・主要AI用語の読み仮名補正
-    .replace(/(?<![a-zA-Z])G検定/g, 'ジーけんてい')
-    .replace(/(?<![a-zA-Z])ChatGPT(?![a-zA-Z])/gi, 'チャットジーピーティー')
-    .replace(/(?<![a-zA-Z])GPT(?![a-zA-Z])/g, 'ジーピーティー')
-    .replace(/(?<![a-zA-Z])CNN(?![a-zA-Z])/g, 'シーエヌエヌ')
-    .replace(/(?<![a-zA-Z])RNN(?![a-zA-Z])/g, 'アールエヌエヌ')
-    .replace(/(?<![a-zA-Z])DNN(?![a-zA-Z])/g, 'ディーエヌエヌ')
-    .replace(/(?<![a-zA-Z])ANN(?![a-zA-Z])/g, 'エーエヌエヌ')
-    .replace(/(?<![a-zA-Z])LLM(?![a-zA-Z])/g, 'エルエルエム')
-    .replace(/(?<![a-zA-Z])NLP(?![a-zA-Z])/g, 'エヌエルピー')
-    .replace(/(?<![a-zA-Z])GPU(?![a-zA-Z])/g, 'ジーピーユー')
-    .replace(/(?<![a-zA-Z])CPU(?![a-zA-Z])/g, 'シーピーユー')
-    .replace(/(?<![a-zA-Z])TPU(?![a-zA-Z])/g, 'ティーピーユー')
-    .replace(/(?<![a-zA-Z])SVM(?![a-zA-Z])/g, 'エスブイエム')
-    .replace(/(?<![a-zA-Z])SGD(?![a-zA-Z])/g, 'エスジーディー')
-    .replace(/(?<![a-zA-Z])IoT(?![a-zA-Z])/g, 'アイオーティー')
-    .replace(/(?<![a-zA-Z])DX(?![a-zA-Z])/g, 'ディーエックス')
-    .replace(/(?<![a-zA-Z])DQN(?![a-zA-Z])/g, 'ディーキューエヌ')
-    .replace(/(?<![a-zA-Z])VAE(?![a-zA-Z])/g, 'ブイエーイー')
-    .replace(/(?<![a-zA-Z])GAN(?![a-zA-Z])/g, 'ガン')
-    .replace(/(?<![a-zA-Z])AGI(?![a-zA-Z])/g, 'エージーアイ')
-    .replace(/(?<![a-zA-Z])BERT(?![a-zA-Z])/g, 'バート')
-    .replace(/(?<![a-zA-Z])RL(?![a-zA-Z])/g, 'アールエル')
-    .replace(/(?<![a-zA-Z])ML(?![a-zA-Z])/g, 'エムエル')
-    .replace(/\n+/g, '。 ');
-
-  return clean;
-}
-
-function speakText(text, title = "音声読み上げ中...") {
-  if (!state.tts.synth) return;
-
-  // 既存の音声を停止
-  stopSpeaking();
-
-  if (!text || text.trim() === "") return;
-
-  // 読み上げテキストのクリーンアップ（記号・専門用語発音補正）
-  const cleanText = cleanTextForSpeech(text);
-
-  const utterance = new SpeechSynthesisUtterance(cleanText);
-  if (state.tts.voice) utterance.voice = state.tts.voice;
-  utterance.lang = 'ja-JP';
-  utterance.rate = state.tts.rate;
-  utterance.pitch = 1.0;
-
-  utterance.onstart = () => {
-    state.tts.isSpeaking = true;
-    state.tts.isPaused = false;
-    elements.audioBar.classList.remove('hidden');
-    elements.audioReadingTitle.textContent = title;
-    elements.btnAudioPlayPause.textContent = '⏸';
-  };
-
-  utterance.onend = () => {
-    // キューがある場合は次を再生
-    if (state.tts.queue.length > 0) {
-      const next = state.tts.queue.shift();
-      speakText(next.text, next.title);
-    } else {
-      stopSpeaking();
-    }
-  };
-
-  utterance.onerror = (e) => {
-    console.error("TTS Error:", e);
-    stopSpeaking();
-  };
-
-  state.tts.synth.speak(utterance);
-}
-
-function togglePlayPauseSpeech() {
-  if (!state.tts.synth) return;
-
-  if (state.tts.synth.speaking) {
-    if (state.tts.isPaused) {
-      state.tts.synth.resume();
-      state.tts.isPaused = false;
-      elements.btnAudioPlayPause.textContent = '⏸';
-    } else {
-      state.tts.synth.pause();
-      state.tts.isPaused = true;
-      elements.btnAudioPlayPause.textContent = '▶';
-    }
-  }
-}
-
-function stopSpeaking() {
-  if (!state.tts.synth) return;
-  state.tts.synth.cancel();
-  state.tts.isSpeaking = false;
-  state.tts.isPaused = false;
-  state.tts.queue = [];
-  elements.audioBar.classList.add('hidden');
-}
-
-// ==========================================
-// 用語リンク自動生成 & モーダル表示
-// ==========================================
-function renderTextWithTermLinks(text) {
-  if (!text) return '';
-  let escaped = escapeHtml(text);
-
-  // 用語を文字数の長い順にソート（部分一致で短いものが先に置換されるのを防ぐ）
-  const sortedTerms = [...state.terms].sort((a, b) => {
-    // 括弧内の英語を除いたキーワード長などで比較
-    const nameA = a.term.split('(')[0].trim();
-    const nameB = b.term.split('(')[0].trim();
-    return nameB.length - nameA.length;
-  });
-
-  sortedTerms.forEach(termObj => {
-    // 主用語名（例: "Transformer", "過学習"）
-    const mainTerm = termObj.term.split('(')[0].trim();
-    if (mainTerm.length < 2) return;
-
-    // 特殊文字エスケープ
-    const escapedTermName = mainTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const regex = new RegExp(`(?<!<[^>]*)(${escapedTermName})(?![^<]*>)`, 'gi');
-
-    escaped = escaped.replace(regex, (match) => {
-      return `<a href="javascript:void(0)" class="term-link" data-term-id="${termObj.id}">${match}</a>`;
-    });
-  });
-
-  return escaped;
-}
-
-function openTermModal(termId) {
-  const term = state.terms.find(t => t.id === termId);
-  if (!term) return;
-
-  state.activeModalTerm = term;
-  elements.modalTermTitle.textContent = term.term;
-  elements.modalTermStars.textContent = '★'.repeat(term.importance || 3);
-  elements.modalTermCategory.textContent = term.category;
-  elements.modalTermSummary.textContent = term.summary;
-  elements.modalTermDetails.textContent = term.details || '';
-
-  elements.termModal.classList.remove('hidden');
-}
-
-function closeTermModal() {
-  elements.termModal.classList.add('hidden');
-  state.activeModalTerm = null;
-}
-
-// ==========================================
-// 初期化 & ハイブリッドデータ通信 (GitHub Pages & ローカルサーバー対応)
-// ==========================================
-const STORAGE_KEY_MANUAL_QUESTIONS = 'gkentei_custom_questions_v1';
-
-function getStoredManualQuestions() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY_MANUAL_QUESTIONS);
-    return raw ? JSON.parse(raw) : [];
-  } catch (e) {
-    console.warn("LocalStorage読み込みエラー:", e);
-    return [];
-  }
-}
-
-function saveStoredManualQuestions(questions) {
-  try {
-    localStorage.setItem(STORAGE_KEY_MANUAL_QUESTIONS, JSON.stringify(questions));
-  } catch (e) {
-    console.warn("LocalStorage保存エラー:", e);
-  }
-}
-
-async function initApp() {
-  initTTS();
-  setupTabs();
-  setupEventListeners();
-
-  // PWA Service Worker 登録（オフライン対応 & 自動更新検知）
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('./sw.js').then(reg => {
-      console.log("PWA Service Worker registered:", reg.scope);
-      reg.addEventListener('updatefound', () => {
-        const newWorker = reg.installing;
-        if (!newWorker) return;
-        newWorker.addEventListener('statechange', () => {
-          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-            showToast("✨ 最新バージョン(v3.9)に自動更新されました！");
-          }
-        });
-      });
-    }).catch(err => {
-      console.log("PWA Service Worker registration skipped:", err);
-    });
-  }
-
-  try {
-    // 1. 静的JSONファイルからデータを読み込み（GitHub Pages・オフライン環境で100%動作）
-    const [catRes, qRes, termsRes] = await Promise.all([
-      fetch('data/categories.json').then(r => r.json()),
-      fetch('data/questions.json').then(r => r.json()),
-      fetch('data/terms.json').then(r => r.json())
-    ]);
-
-    state.categories = catRes;
-    state.terms = termsRes;
-
-    // 2. ブラウザのLocalStorageに保存されている手動登録問題を合体
-    const localManual = getStoredManualQuestions();
-    // 重複を避けてマージ
-    const initialIds = new Set(qRes.map(q => q.id));
-    const uniqueManual = localManual.filter(q => !initialIds.has(q.id));
-    state.questions = [...uniqueManual, ...qRes];
-
-    // 3. ローカルPythonサーバーが動いているかチェック
-    try {
-      const statusRes = await fetch('/api/status').then(r => r.json());
-      state.serverInfo = statusRes;
-      state.isServerMode = true;
-    } catch (e) {
-      state.isServerMode = false;
-    }
-
-    updateHeaderStats();
-    populateCategoryDropdowns();
-    renderDrillCategories();
-    renderTermsList();
-    renderAdminTable();
-  } catch (err) {
-    console.error("初期データの読み込みに失敗しました:", err);
-    showToast("データ読み込みに失敗しました。オフラインまたはファイル配置を確認してください。");
-  }
-}
-
-function updateHeaderStats() {
-  elements.headerQCount.textContent = state.questions.length;
-  elements.headerTCount.textContent = state.terms.length;
-  if (state.isServerMode && state.serverInfo && state.serverInfo.port) {
-    elements.headerPort.textContent = `ローカルサーバー :${state.serverInfo.port}`;
-  } else {
-    elements.headerPort.textContent = `PWA / いつでも学習可能`;
-  }
-}
-
-function setupTabs() {
-  elements.navTabs.forEach(tab => {
-    tab.addEventListener('click', () => {
-      elements.navTabs.forEach(t => t.classList.remove('active'));
-      elements.tabPanes.forEach(p => p.classList.remove('active'));
-
-      tab.classList.add('active');
-      const targetId = tab.dataset.tab;
-      document.getElementById(targetId).classList.add('active');
-
-      if (targetId !== 'audio-flow-tab' && state.audioFlow && state.audioFlow.isPlaying) {
-        stopAudioFlow();
+function openDatabase() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME, { keyPath: 'id' });
       }
-
-      if (targetId === 'admin-tab') {
-        renderAdminTable();
-      } else if (targetId === 'terms-tab') {
-        renderTermsList();
-      } else if (targetId === 'drill-tab') {
-        renderDrillCategories();
-      } else if (targetId === 'audio-flow-tab') {
-        initAudioFlow();
-      }
-    });
-  });
-}
-
-function populateCategoryDropdowns() {
-  // 用語集フィルタ
-  elements.termsCategoryFilter.innerHTML = '<option value="all">すべての分野</option>';
-  // 管理フォーム
-  elements.formCategory.innerHTML = '';
-  // 聞き流しカテゴリ
-  populateFlowCategorySelect();
-
-  state.categories.forEach(cat => {
-    const opt1 = document.createElement('option');
-    opt1.value = cat.name;
-    opt1.textContent = cat.name;
-    elements.termsCategoryFilter.appendChild(opt1);
-
-    const opt2 = document.createElement('option');
-    opt2.value = cat.name;
-    opt2.textContent = cat.name;
-    elements.formCategory.appendChild(opt2);
-  });
-}
-
-// ==========================================
-// 1. 模擬試験ロジック
-// ==========================================
-function startExam() {
-  stopSpeaking();
-  const countVal = elements.examCountSelect.value;
-  const count = countVal === 'all' ? state.questions.length : parseInt(countVal, 10);
-  const shuffled = shuffleArray(state.questions).slice(0, Math.min(count, state.questions.length));
-
-  if (shuffled.length === 0) {
-    alert("出題可能な問題がありません。先に問題を登録してください。");
-    return;
-  }
-
-  const timerMode = elements.examTimerToggle.value;
-  let totalSeconds = 0;
-  if (timerMode === 'pace40') {
-    totalSeconds = shuffled.length * 40; // 1問あたり40秒
-  } else if (timerMode === 'official120') {
-    totalSeconds = 120 * 60; // 120分 = 7200秒
-  } else {
-    totalSeconds = 0; // 無制限
-  }
-
-  state.exam = {
-    active: true,
-    questions: shuffled,
-    currentIndex: 0,
-    answers: {},
-    flags: {},
-    timerInterval: null,
-    remainingSeconds: totalSeconds,
-    totalSeconds: totalSeconds,
-    startTime: Date.now(),
-    elapsedSeconds: 0,
-    paceSeconds: 40,
-    paceRemaining: 40,
-    paceInterval: null
-  };
-
-  elements.examStartView.classList.add('hidden');
-  elements.examResultView.classList.add('hidden');
-  elements.examPlayView.classList.remove('hidden');
-  document.body.classList.add('in-exam');
-
-  if (totalSeconds > 0) {
-    elements.examTimerBox.classList.remove('hidden');
-    elements.examTimerText.textContent = formatSeconds(totalSeconds);
-    startExamTimer();
-  } else {
-    elements.examTimerBox.classList.add('hidden');
-  }
-
-  renderExamPalette();
-  renderCurrentExamQuestion();
-}
-
-function startExamTimer() {
-  if (state.exam.timerInterval) clearInterval(state.exam.timerInterval);
-  state.exam.timerInterval = setInterval(() => {
-    state.exam.remainingSeconds--;
-    elements.examTimerText.textContent = formatSeconds(state.exam.remainingSeconds);
-
-    if (state.exam.remainingSeconds <= 0) {
-      clearInterval(state.exam.timerInterval);
-      alert("制限時間となりました。試験を終了して採点します。");
-      finishExam();
-    }
-  }, 1000);
-}
-
-function resetPaceTimer() {
-  if (state.exam.paceInterval) clearInterval(state.exam.paceInterval);
-  state.exam.paceRemaining = 40;
-  updatePaceDisplay();
-
-  state.exam.paceInterval = setInterval(() => {
-    state.exam.paceRemaining--;
-    updatePaceDisplay();
-  }, 1000);
-}
-
-function updatePaceDisplay() {
-  if (!elements.paceSecondsText || !elements.paceProgressBar) return;
-  const rem = state.exam.paceRemaining;
-  const box = elements.perQuestionTimerBox;
-  if (!box) return;
-
-  box.classList.remove('pace-warning', 'pace-danger');
-
-  if (rem >= 0) {
-    elements.paceSecondsText.textContent = `${rem}秒`;
-    const pct = Math.max(0, (rem / 40) * 100);
-    elements.paceProgressBar.style.width = `${pct}%`;
-
-    if (rem <= 15 && rem > 5) {
-      box.classList.add('pace-warning');
-    } else if (rem <= 5) {
-      box.classList.add('pace-danger');
-    }
-  } else {
-    // 40秒超過
-    const overtime = Math.abs(rem);
-    elements.paceSecondsText.textContent = `超過 +${overtime}秒`;
-    elements.paceProgressBar.style.width = `100%`;
-    box.classList.add('pace-danger');
-  }
-}
-
-function renderExamPalette() {
-  elements.examPaletteGrid.innerHTML = '';
-  const total = state.exam.questions.length;
-  const answeredCount = Object.keys(state.exam.answers).length;
-
-  if (elements.paletteCountLabel) {
-    elements.paletteCountLabel.textContent = `${total}問`;
-  }
-  if (elements.paletteAnsweredCount) {
-    elements.paletteAnsweredCount.textContent = `${answeredCount}/${total}回答`;
-  }
-
-  state.exam.questions.forEach((q, idx) => {
-    const btn = document.createElement('button');
-    btn.className = 'palette-btn';
-    btn.textContent = idx + 1;
-
-    if (idx === state.exam.currentIndex) btn.classList.add('current');
-    if (state.exam.answers[idx] !== undefined) btn.classList.add('answered');
-    if (state.exam.flags[idx]) btn.classList.add('flagged');
-
-    btn.addEventListener('click', () => {
-      state.exam.currentIndex = idx;
-      renderCurrentExamQuestion();
-      renderExamPalette();
-      if (window.innerWidth <= 768) {
-        const qCard = document.querySelector('.question-card');
-        if (qCard) {
-          qCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
-      }
-    });
-
-    elements.examPaletteGrid.appendChild(btn);
-  });
-}
-
-function renderCurrentExamQuestion(shouldResetPace = true) {
-  const { currentIndex, questions, answers, flags } = state.exam;
-  const q = questions[currentIndex];
-
-  if (shouldResetPace && state.exam.totalSeconds > 0) {
-    resetPaceTimer();
-  }
-
-  elements.examQProgress.textContent = `第 ${currentIndex + 1} 問 / ${questions.length} 問`;
-  elements.examCurrentCategory.textContent = q.category || '全般';
-  elements.examQuestionText.textContent = q.question;
-
-  // フラグボタン状態
-  if (flags[currentIndex]) {
-    elements.btnFlagToggle.classList.add('btn-warning');
-    elements.btnFlagToggle.innerHTML = '🚩 見直し中';
-  } else {
-    elements.btnFlagToggle.classList.remove('btn-warning');
-    elements.btnFlagToggle.innerHTML = '<span>🚩</span> 見直しチェック';
-  }
-
-  // 選択肢レンダリング
-  elements.examChoicesContainer.innerHTML = '';
-  const letters = ['①', '②', '③', '④', '⑤', '⑥'];
-  q.choices.forEach((choiceText, idx) => {
-    const item = document.createElement('div');
-    item.className = 'choice-item';
-    if (answers[currentIndex] === idx) {
-      item.classList.add('selected');
-    }
-
-    item.innerHTML = `
-      <div class="choice-badge">${letters[idx] || (idx + 1)}</div>
-      <div class="choice-text">${escapeHtml(choiceText)}</div>
-    `;
-
-    item.addEventListener('click', () => {
-      state.exam.answers[currentIndex] = idx;
-      renderCurrentExamQuestion(false); // 選択肢選択時はタイマーリセットしない
-      renderExamPalette();
-    });
-
-    elements.examChoicesContainer.appendChild(item);
-  });
-
-  // 前後ボタン状態
-  elements.btnExamPrev.disabled = currentIndex === 0;
-  elements.btnExamNext.textContent = (currentIndex === questions.length - 1) ? '最後の問題です' : '次の問題 ▶';
-}
-
-function speakCurrentExamQuestion() {
-  const { currentIndex, questions } = state.exam;
-  const q = questions[currentIndex];
-  if (!q) return;
-
-  const examView = document.getElementById('exam-play-view');
-  if (examView) {
-    examView.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  }
-
-  let textToRead = `第 ${currentIndex + 1} 問。分野、${q.category}。問題文。${q.question}。`;
-  q.choices.forEach((c, i) => {
-    textToRead += `選択肢 ${i + 1}、${c}。`;
-  });
-
-  speakText(textToRead, `第 ${currentIndex + 1} 問の読み上げ`);
-}
-
-function finishExam() {
-  stopSpeaking();
-  if (state.exam.timerInterval) clearInterval(state.exam.timerInterval);
-  if (state.exam.paceInterval) clearInterval(state.exam.paceInterval);
-  state.exam.elapsedSeconds = Math.round((Date.now() - state.exam.startTime) / 1000);
-
-  const total = state.exam.questions.length;
-  let correct = 0;
-
-  state.exam.questions.forEach((q, idx) => {
-    if (state.exam.answers[idx] === q.answer) {
-      correct++;
-    }
-  });
-
-  const percent = Math.round((correct / total) * 100);
-  const isPass = percent >= 70;
-
-  elements.resultScorePercent.textContent = `${percent}%`;
-  elements.resultScoreFraction.textContent = `${correct} / ${total}`;
-  elements.resultCorrectCount.textContent = correct;
-  elements.resultWrongCount.textContent = total - correct;
-  elements.resultTimeTaken.textContent = `${Math.floor(state.exam.elapsedSeconds / 60)}分${state.exam.elapsedSeconds % 60}秒`;
-
-  if (isPass) {
-    elements.resultVerdict.textContent = "🎉 合格ライン達成！";
-    elements.resultVerdict.style.color = "#10b981";
-    elements.resultFeedback.textContent = "素晴らしい成果です！G検定の合格水準（70%以上）に達しています。この調子で弱点をなくしましょう。";
-  } else {
-    elements.resultVerdict.textContent = "⚠️ もう一歩！復習しましょう";
-    elements.resultVerdict.style.color = "#f59e0b";
-    elements.resultFeedback.textContent = "合格目安は70%以上です。間違えた問題の解説を熟読し、知識を定着させましょう。";
-  }
-
-  renderReviewList('all');
-
-  elements.examPlayView.classList.add('hidden');
-  elements.examResultView.classList.remove('hidden');
-  document.body.classList.remove('in-exam');
-}
-
-function renderReviewList(filter = 'all') {
-  elements.examReviewContainer.innerHTML = '';
-  const letters = ['①', '②', '③', '④'];
-
-  state.exam.questions.forEach((q, idx) => {
-    const userAns = state.exam.answers[idx];
-    const isCorrect = userAns === q.answer;
-
-    if (filter === 'mistakes' && isCorrect) return;
-
-    const div = document.createElement('div');
-    div.className = `review-item ${isCorrect ? 'correct' : 'wrong'}`;
-
-    const userAnsText = userAns !== undefined ? `${letters[userAns]} ${q.choices[userAns]}` : '（無回答）';
-    const correctAnsText = `${letters[q.answer]} ${q.choices[q.answer]}`;
-
-    div.innerHTML = `
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-        <span class="review-badge-status ${isCorrect ? 'badge-correct' : 'badge-wrong'}">
-          第 ${idx + 1} 問：${isCorrect ? '○ 正解' : '× 不正解'}
-        </span>
-        <div style="display:flex; gap:8px; align-items:center;">
-          <span class="category-badge">${escapeHtml(q.category)}</span>
-          <button class="btn btn-outline btn-sm btn-speak-single-review" data-idx="${idx}">🔊 音声解説</button>
-        </div>
-      </div>
-      <h4 style="font-size:1.05rem; margin-bottom:10px;">${escapeHtml(q.question)}</h4>
-      <div style="font-size:0.9rem; margin-bottom:6px;">
-        <strong>あなたの回答:</strong> <span style="color:${isCorrect ? '#10b981' : '#ef4444'}; font-weight:600;">${escapeHtml(userAnsText)}</span>
-      </div>
-      <div style="font-size:0.9rem; margin-bottom:10px;">
-        <strong>正解:</strong> <span style="color:#10b981; font-weight:700;">${escapeHtml(correctAnsText)}</span>
-      </div>
-      <div class="review-explanation">${renderTextWithTermLinks(q.explanation)}</div>
-    `;
-
-    elements.examReviewContainer.appendChild(div);
-  });
-
-  // 個別解説音声ボタンのイベント付与
-  document.querySelectorAll('.btn-speak-single-review').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      const idx = parseInt(e.currentTarget.dataset.idx, 10);
-      const q = state.exam.questions[idx];
-      speakText(`第 ${idx + 1} 問の解説。${q.explanation}`, `第 ${idx + 1} 問の解説を再生中`);
-    });
-  });
-
-  // 用語リンクのイベント付与
-  attachTermLinkEvents();
-}
-
-function speakAllMistakesExplanations() {
-  const mistakes = state.exam.questions.filter((q, idx) => state.exam.answers[idx] !== q.answer);
-  if (mistakes.length === 0) {
-    alert("全問正解です！間違えた問題はありません。");
-    return;
-  }
-
-  stopSpeaking();
-  state.tts.queue = mistakes.map((q, idx) => {
-    return {
-      title: `誤答復習 (${idx + 1}/${mistakes.length}): ${q.category}`,
-      text: `問題。${q.question}。解説。${q.explanation}`
     };
-  });
-
-  if (state.tts.queue.length > 0) {
-    const first = state.tts.queue.shift();
-    speakText(first.text, first.title);
-  }
-}
-
-// ==========================================
-// 2. 分野別ドリルロジック
-// ==========================================
-function renderDrillCategories() {
-  elements.drillCategoryGrid.innerHTML = '';
-  state.categories.forEach(cat => {
-    const count = state.questions.filter(q => q.category === cat.name).length;
-
-    const card = document.createElement('div');
-    card.className = 'category-card';
-    card.innerHTML = `
-      <h3>${escapeHtml(cat.name)}</h3>
-      <p>${escapeHtml(cat.description)}</p>
-      <div class="category-footer">
-        <span>収録: ${count} 問</span>
-      </div>
-      <div class="drill-card-actions">
-        <button class="btn btn-primary btn-drill-start">特訓を開始 →</button>
-        <button class="btn btn-outline btn-drill-flow">🎧 聞き流し</button>
-      </div>
-    `;
-
-    const btnStart = card.querySelector('.btn-drill-start');
-    const btnFlow = card.querySelector('.btn-drill-flow');
-
-    btnStart.addEventListener('click', (e) => {
-      e.stopPropagation();
-      startCategoryDrill(cat.name);
-    });
-
-    btnFlow.addEventListener('click', (e) => {
-      e.stopPropagation();
-      startAudioFlowForCategory(cat.name, 'questions');
-    });
-
-    card.addEventListener('click', () => {
-      startCategoryDrill(cat.name);
-    });
-
-    elements.drillCategoryGrid.appendChild(card);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
   });
 }
 
-function startCategoryDrill(categoryName) {
-  stopSpeaking();
-  const filtered = state.questions.filter(q => q.category === categoryName);
-  if (filtered.length === 0) {
-    alert(`「${categoryName}」分野の問題がまだありません。管理画面から問題を追加してください。`);
-    return;
-  }
-
-  state.drill = {
-    category: categoryName,
-    questions: shuffleArray(filtered),
-    currentIndex: 0,
-    hasAnswered: false
-  };
-
-  elements.drillCategoryGrid.parentElement.classList.add('hidden');
-  elements.drillActiveView.classList.remove('hidden');
-  renderCurrentDrillQuestion();
-}
-
-function renderCurrentDrillQuestion() {
-  const { currentIndex, questions } = state.drill;
-  const q = questions[currentIndex];
-  state.drill.hasAnswered = false;
-
-  elements.drillProgressText.textContent = `問題 ${currentIndex + 1} / ${questions.length}`;
-  elements.drillCategoryName.textContent = q.category;
-  elements.drillQuestionText.textContent = q.question;
-  elements.drillExplanationBox.classList.add('hidden');
-
-  const letters = ['①', '②', '③', '④'];
-  elements.drillChoicesContainer.innerHTML = '';
-  q.choices.forEach((choiceText, idx) => {
-    const item = document.createElement('div');
-    item.className = 'choice-item';
-    item.innerHTML = `
-      <div class="choice-badge">${letters[idx] || (idx + 1)}</div>
-      <div class="choice-text">${escapeHtml(choiceText)}</div>
-    `;
-
-    item.addEventListener('click', () => {
-      if (state.drill.hasAnswered) return;
-      handleDrillAnswer(idx);
-    });
-
-    elements.drillChoicesContainer.appendChild(item);
+async function getAllFromDB() {
+  const db = await openDatabase();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const store = tx.objectStore(STORE_NAME);
+    const req = store.getAll();
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
   });
 }
 
-function speakCurrentDrillQuestion() {
-  const { currentIndex, questions } = state.drill;
-  const q = questions[currentIndex];
-  if (!q) return;
-
-  const drillCard = document.getElementById('drill-card') || elements.drillChoicesContainer;
-  if (drillCard) {
-    drillCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  }
-
-  let textToRead = `分野、${q.category}。問題文。${q.question}。`;
-  q.choices.forEach((c, i) => {
-    textToRead += `選択肢 ${i + 1}、${c}。`;
-  });
-
-  speakText(textToRead, `ドリル問題 ${currentIndex + 1} の読み上げ`);
-}
-
-function handleDrillAnswer(selectedIndex) {
-  state.drill.hasAnswered = true;
-  const { currentIndex, questions } = state.drill;
-  const q = questions[currentIndex];
-  const isCorrect = selectedIndex === q.answer;
-
-  const choices = elements.drillChoicesContainer.children;
-  for (let i = 0; i < choices.length; i++) {
-    if (i === q.answer) {
-      choices[i].style.borderColor = '#10b981';
-      choices[i].style.backgroundColor = '#ecfdf5';
-    } else if (i === selectedIndex && !isCorrect) {
-      choices[i].style.borderColor = '#ef4444';
-      choices[i].style.backgroundColor = '#fef2f2';
+async function saveAllToDB(items) {
+  const db = await openDatabase();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    store.clear();
+    for (const item of items) {
+      store.put(item);
     }
-  }
-
-  elements.drillResultBanner.className = `explanation-status ${isCorrect ? 'correct' : 'wrong'}`;
-  elements.drillResultBanner.textContent = isCorrect ? '🎉 正解！' : '× 不正解...';
-  elements.drillExplanationText.innerHTML = renderTextWithTermLinks(q.explanation);
-  elements.drillExplanationBox.classList.remove('hidden');
-
-  attachTermLinkEvents();
-
-  if (currentIndex === questions.length - 1) {
-    elements.btnDrillNext.textContent = '分野選択に戻る';
-  } else {
-    elements.btnDrillNext.textContent = '次の問題へ進む ▶';
-  }
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
 }
 
-function speakCurrentDrillExplanation() {
-  const { currentIndex, questions } = state.drill;
-  const q = questions[currentIndex];
-  if (!q) return;
-  speakText(`解説。${q.explanation}`, `ドリル解説の読み上げ`);
-}
+createApp({
+  setup() {
+    const chapters = [
+      { id: 'ch1', name: '第1章 建築学（環境・構造・材料）' },
+      { id: 'ch2', name: '第2章 共通（設備・契約・測量）' },
+      { id: 'ch3', name: '第3章 躯体施工（地盤・RC・鉄骨・型枠）' },
+      { id: 'ch4', name: '第4章 仕上施工（防水・タイル・内装・建具）' },
+      { id: 'ch5', name: '第5章 施工管理法（工程・品質・安全）' },
+      { id: 'ch6', name: '第6章 法規（建築基準法・建設業法・労基法）' }
+    ];
 
-// ==========================================
-// 3. 用語集ロジック
-// ==========================================
-function renderTermsList() {
-  const query = elements.termsSearchInput.value.toLowerCase().trim();
-  const selectedCat = elements.termsCategoryFilter.value;
+    // ==========================================
+    // 🔒 セキュリティ・限定試用認証 ＆ 拡散追跡防止
+    // ==========================================
+    const VALID_PASSCODES = ['2026', 'cbt2026', '1985', '7777', 'kentiku'];
+    const isAuthorized = ref(localStorage.getItem('cbt_authorized') === 'true');
+    const authPasscode = ref('');
+    const authError = ref('');
+    const authSuccessMsg = ref('');
 
-  const filtered = state.terms.filter(t => {
-    const matchCat = (selectedCat === 'all' || t.category === selectedCat);
-    const matchQuery = !query || 
-      t.term.toLowerCase().includes(query) || 
-      t.summary.toLowerCase().includes(query) || 
-      (t.details && t.details.toLowerCase().includes(query));
-    return matchCat && matchQuery;
-  });
-
-  elements.termsContainer.innerHTML = '';
-  if (filtered.length === 0) {
-    elements.termsContainer.innerHTML = '<p style="color:var(--text-muted); grid-column:1/-1; text-align:center; padding:2rem;">該当する用語が見つかりませんでした。</p>';
-    return;
-  }
-
-  filtered.forEach(t => {
-    const stars = '★'.repeat(t.importance || 3);
-    const card = document.createElement('div');
-    card.className = 'term-card';
-    card.innerHTML = `
-      <div class="term-header">
-        <span class="term-title">${escapeHtml(t.term)}</span>
-        <span class="term-stars" title="重要度: ${stars}">${stars}</span>
-      </div>
-      <span class="badge-tag" style="margin-bottom:8px;">${escapeHtml(t.category)}</span>
-      <div class="term-summary">${escapeHtml(t.summary)}</div>
-      ${t.details ? `<div class="term-details">${escapeHtml(t.details)}</div>` : ''}
-      <div class="term-card-footer">
-        <button class="btn btn-outline btn-sm btn-speak-term" data-term-id="${t.id}">🔊 音声で聞く</button>
-      </div>
-    `;
-    elements.termsContainer.appendChild(card);
-  });
-
-  document.querySelectorAll('.btn-speak-term').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      const tId = e.currentTarget.dataset.termId;
-      const term = state.terms.find(item => item.id === tId);
-      if (term) {
-        speakText(`${term.term}。重要度 ${term.importance}。${term.summary}。${term.details || ''}`, `${term.term} の解説`);
+    const maskUrlAndHistory = () => {
+      try {
+        if (window.history && window.history.replaceState) {
+          const cleanUrl = window.location.pathname.replace(/\/index\.html$/, '/') || './';
+          window.history.replaceState(null, document.title, cleanUrl);
+        }
+      } catch (e) {
+        console.warn('[Security] history mask error:', e);
       }
+    };
+
+    const verifyAuth = () => {
+      authError.value = '';
+      authSuccessMsg.value = '';
+      const input = authPasscode.value.trim().toLowerCase();
+      if (VALID_PASSCODES.includes(input)) {
+        isAuthorized.value = true;
+        localStorage.setItem('cbt_authorized', 'true');
+        authSuccessMsg.value = '認証に成功しました。アプリを起動します...';
+        maskUrlAndHistory();
+      } else {
+        authError.value = '合言葉（パスコード）が正しくありません。管理者にお問い合わせください。';
+      }
+    };
+
+    const lockApp = () => {
+      if (confirm('アプリをロックしますか？ 次回起動時に再度合言葉が必要になります。')) {
+        localStorage.removeItem('cbt_authorized');
+        isAuthorized.value = false;
+        authPasscode.value = '';
+        authError.value = '';
+      }
+    };
+
+    const activeTab = ref('exam'); // 'exam' | 'words' | 'quiz' | 'cheatsheet' | 'manage'
+    const allQuestions = ref([]);
+    const totalQuestionsCount = computed(() => allQuestions.value.length);
+
+    // 📲 スマホ読み込み用QRコードモーダル
+    const showQrModal = ref(false);
+    const webAppUrl = 'https://genn0710-max.github.io/1kyu-cbt/';
+    const qrCodeImageUrl = computed(() => {
+      return `https://api.qrserver.com/v1/create-qr-code/?size=260x260&margin=10&data=${encodeURIComponent(webAppUrl)}`;
     });
-  });
-}
 
-function attachTermLinkEvents() {
-  document.querySelectorAll('.term-link').forEach(link => {
-    link.addEventListener('click', (e) => {
-      e.preventDefault();
-      const termId = e.currentTarget.dataset.termId;
-      openTermModal(termId);
-    });
-  });
-}
+    // ==========================================
+    // ⚡ 即解ワード暗記（一問一答フラッシュ）
+    // ==========================================
+    const allWords = ref(window.WORD_BANK || []);
+    const wordFilterCategory = ref('すべて');
+    const wordSessionCountOption = ref(50); // 10 | 25 | 50
+    const isWordRandom = ref(true); // ランダムシャッフル出題
+    const wordSessionWords = ref([]);
+    const currentWordIndex = ref(0);
+    const selectedWordChoice = ref(null);
+    const hasAnsweredWord = ref(false);
+    const wordStreak = ref(0);
+    const maxWordStreak = ref(0);
+    const wordMastered = ref({});
+    const wordAnswers = ref({}); // { [wordId]: { choice, isCorrect, word } }
+    const isWordSessionFinished = ref(false);
+    const showWordGlossary = ref(false);
+    const wordReviewFilter = ref('all'); // 'all' | 'wrong' | 'correct'
+    const shuffledChoicesCache = ref({});
 
-// ==========================================
-// 4. 手動問題登録 & 一覧テーブル
-// ==========================================
-async function handleAddQuestionSubmit(e) {
-  e.preventDefault();
+    // シャッフル用ヘルパー (Fisher-Yates)
+    const shuffleList = (arr) => {
+      const copy = [...arr];
+      for (let i = copy.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [copy[i], copy[j]] = [copy[j], copy[i]];
+      }
+      return copy;
+    };
 
-  const selectedAnsRadio = document.querySelector('input[name="form-answer"]:checked');
-  if (!selectedAnsRadio) {
-    alert("正解の選択肢を選択してください。");
-    return;
-  }
+    // セッション開始・リセット
+    const startWordSession = (customList = null) => {
+      let pool = customList;
+      if (!pool) {
+        pool = allWords.value;
+        if (wordFilterCategory.value !== 'すべて') {
+          pool = pool.filter(w => w.category === wordFilterCategory.value);
+        }
+        if (isWordRandom.value) {
+          pool = shuffleList(pool);
+        } else {
+          pool = [...pool];
+        }
+        const limit = Number(wordSessionCountOption.value) || 50;
+        pool = pool.slice(0, limit);
+      }
 
-  const payload = {
-    category: elements.formCategory.value,
-    source: elements.formSource.value,
-    question: elements.formQuestion.value,
-    choices: elements.choiceInputs.map(input => input.value.trim()),
-    answer: parseInt(selectedAnsRadio.value, 10),
-    explanation: elements.formExplanation.value
-  };
+      wordSessionWords.value = pool;
+      currentWordIndex.value = 0;
+      selectedWordChoice.value = null;
+      hasAnsweredWord.value = false;
+      wordStreak.value = 0;
+      maxWordStreak.value = 0;
+      wordAnswers.value = {};
+      isWordSessionFinished.value = false;
+      showWordGlossary.value = false;
+      wordReviewFilter.value = 'all';
 
-  try {
-    if (state.isServerMode) {
-      const res = await fetch('/api/questions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+      // 選択肢のシャッフルキャッシュ
+      const choiceCache = {};
+      pool.forEach(w => {
+        const choices = [w.answer, ...(w.dummy || [])];
+        choiceCache[w.id] = shuffleList(choices);
       });
+      shuffledChoicesCache.value = choiceCache;
+    };
 
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || '登録に失敗しました');
-      }
+    // 初期化実行
+    startWordSession();
 
-      showToast("🎉 問題が登録され、ローカルJSONに即座に反映されました！");
-      const freshQuestions = await fetch('/api/questions').then(r => r.json());
-      state.questions = freshQuestions;
-    } else {
-      // GitHub Pages / スマホ（静的）環境: LocalStorage に保存
-      const nowStr = new Date().toISOString().replace(/[-:T.]/g, '').slice(0, 14);
-      const newQuestion = {
-        id: `q_m_${nowStr}`,
-        ...payload,
-        createdAt: new Date().toISOString().slice(0, 10)
+    const activeWords = computed(() => wordSessionWords.value);
+
+    const currentWord = computed(() => {
+      if (wordSessionWords.value.length === 0) return {};
+      return wordSessionWords.value[currentWordIndex.value] || {};
+    });
+
+    const currentWordChoices = computed(() => {
+      if (!currentWord.value || !currentWord.value.id) return [];
+      return shuffledChoicesCache.value[currentWord.value.id] || [currentWord.value.answer, ...(currentWord.value.dummy || [])];
+    });
+
+    const handleSelectWord = (choice) => {
+      if (hasAnsweredWord.value || !currentWord.value.id) return;
+      hasAnsweredWord.value = true;
+      selectedWordChoice.value = choice;
+      const isCorrect = choice === currentWord.value.answer;
+
+      wordAnswers.value[currentWord.value.id] = {
+        choice: choice,
+        isCorrect: isCorrect,
+        word: currentWord.value
       };
 
-      const stored = getStoredManualQuestions();
-      stored.unshift(newQuestion);
-      saveStoredManualQuestions(stored);
-
-      state.questions = [newQuestion, ...state.questions];
-      showToast("🎉 問題が登録され、スマホ端末（LocalStorage）に保存されました！");
-    }
-
-    elements.formQuestion.value = '';
-    elements.choiceInputs.forEach(inp => inp.value = '');
-    elements.formExplanation.value = '';
-
-    updateHeaderStats();
-    renderAdminTable();
-    renderDrillCategories();
-  } catch (err) {
-    alert(`エラー: ${err.message}`);
-  }
-}
-
-async function deleteQuestion(id) {
-  if (!confirm(`問題（ID: ${id}）を削除してもよろしいですか？\nこの操作は元に戻せません。`)) {
-    return;
-  }
-
-  try {
-    if (state.isServerMode) {
-      const res = await fetch(`/api/questions/${id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('削除に失敗しました');
-      state.questions = await fetch('/api/questions').then(r => r.json());
-    } else {
-      // LocalStorageから削除
-      const stored = getStoredManualQuestions();
-      const filtered = stored.filter(q => q.id !== id);
-      saveStoredManualQuestions(filtered);
-      state.questions = state.questions.filter(q => q.id !== id);
-    }
-
-    showToast("問題を削除しました");
-    updateHeaderStats();
-    renderAdminTable();
-    renderDrillCategories();
-  } catch (err) {
-    alert(`エラー: ${err.message}`);
-  }
-}
-
-function renderAdminTable() {
-  const query = elements.adminSearchInput.value.toLowerCase().trim();
-  const filtered = state.questions.filter(q => {
-    return !query || q.question.toLowerCase().includes(query) || q.category.toLowerCase().includes(query);
-  });
-
-  elements.adminTableCount.textContent = filtered.length;
-  elements.adminQuestionsTbody.innerHTML = '';
-
-  const letters = ['①', '②', '③', '④'];
-
-  filtered.forEach(q => {
-    const tr = document.createElement('tr');
-    const isManual = q.source && q.source.includes('手動');
-
-    tr.innerHTML = `
-      <td><code>${escapeHtml(q.id)}</code></td>
-      <td><span class="category-badge" style="margin:0;">${escapeHtml(q.category)}</span></td>
-      <td title="${escapeHtml(q.question)}">${escapeHtml(q.question.length > 45 ? q.question.slice(0, 45) + '...' : q.question)}</td>
-      <td><strong>${letters[q.answer] || (q.answer + 1)}</strong></td>
-      <td><span class="badge-source ${isManual ? 'badge-source-manual' : 'badge-source-initial'}">${escapeHtml(q.source || '初期')}</span></td>
-      <td>
-        <button class="btn btn-danger btn-sm" onclick="window.deleteQuestion('${q.id}')">削除</button>
-      </td>
-    `;
-    elements.adminQuestionsTbody.appendChild(tr);
-  });
-}
-
-window.deleteQuestion = deleteQuestion;
-
-// ==========================================
-// 6. 各セクション・重要用語 聞き流しモード（Audio Flow）
-// ==========================================
-
-// --- スリープ防止 (Screen Wake Lock) & タイムアウト防止キープアライブ ---
-let wakeLockSentinel = null;
-let silentKeepAliveAudio = null;
-let speechHeartbeatTimer = null;
-
-async function requestScreenWakeLock() {
-  if (!state.audioFlow.preventSleep) return;
-  if ('wakeLock' in navigator) {
-    try {
-      if (!wakeLockSentinel) {
-        wakeLockSentinel = await navigator.wakeLock.request('screen');
-        wakeLockSentinel.addEventListener('release', () => {
-          wakeLockSentinel = null;
-          updateWakeLockUI(false);
-        });
-        updateWakeLockUI(true);
+      if (isCorrect) {
+        wordStreak.value++;
+        if (wordStreak.value > maxWordStreak.value) {
+          maxWordStreak.value = wordStreak.value;
+        }
+      } else {
+        wordStreak.value = 0;
       }
-    } catch (err) {
-      console.warn('Screen WakeLock unavailable or rejected:', err);
-      updateWakeLockUI(false);
-    }
-  }
-}
+    };
 
-function releaseScreenWakeLock() {
-  if (wakeLockSentinel) {
-    wakeLockSentinel.release().catch(() => {});
-    wakeLockSentinel = null;
-  }
-  updateWakeLockUI(false);
-}
+    const toggleWordGlossary = () => {
+      showWordGlossary.value = !showWordGlossary.value;
+    };
 
-function updateWakeLockUI(active) {
-  if (elements.flowWakeLockPill) {
-    if (active) {
-      elements.flowWakeLockPill.classList.remove('hidden');
-    } else {
-      elements.flowWakeLockPill.classList.add('hidden');
-    }
-  }
-}
-
-function startAudioKeepAlive(itemTitle = "G検定 聞き流し学習") {
-  // MediaSession API（ロック画面・イヤホン操作対応）
-  if ('mediaSession' in navigator) {
-    try {
-      navigator.mediaSession.metadata = new MediaMetadata({
-        title: itemTitle,
-        artist: 'G検定マスター',
-        album: '各章 聞き流し学習'
-      });
-      navigator.mediaSession.setActionHandler('play', () => togglePlayPauseAudioFlow());
-      navigator.mediaSession.setActionHandler('pause', () => togglePlayPauseAudioFlow());
-      navigator.mediaSession.setActionHandler('nexttrack', () => playNextAudioFlow(false));
-      navigator.mediaSession.setActionHandler('previoustrack', () => playPrevAudioFlow());
-    } catch (e) {
-      console.warn('MediaSession setup warning:', e);
-    }
-  }
-}
-
-function stopAudioKeepAlive() {
-  // 必要に応じたクリーンアップ
-}
-
-// 画面再表示時にWakeLockを再取得
-document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible' && state.audioFlow && state.audioFlow.isPlaying && !state.audioFlow.isPaused) {
-    requestScreenWakeLock();
-  }
-});
-
-function populateFlowCategorySelect() {
-  if (!elements.flowCategorySelect) return;
-  const currentVal = elements.flowCategorySelect.value || 'all';
-  elements.flowCategorySelect.innerHTML = '<option value="all">🎯 すべての分野をまとめて再生</option>';
-  state.categories.forEach(cat => {
-    const opt = document.createElement('option');
-    opt.value = cat.name;
-    opt.textContent = `${cat.name}`;
-    elements.flowCategorySelect.appendChild(opt);
-  });
-  elements.flowCategorySelect.value = currentVal;
-}
-
-function initAudioFlow() {
-  populateFlowCategorySelect();
-  if (!state.audioFlow.items || state.audioFlow.items.length === 0) {
-    loadAudioFlowItems();
-  } else {
-    updateAudioFlowCard();
-    renderAudioFlowPlaylist();
-  }
-}
-
-function setAudioFlowMode(mode) {
-  if (state.audioFlow.mode === mode && state.audioFlow.items.length > 0) return;
-  stopAudioFlow();
-  state.audioFlow.mode = mode;
-
-  if (mode === 'questions') {
-    elements.flowModeBtnQuestions.classList.add('active');
-    elements.flowModeBtnTerms.classList.remove('active');
-    if (elements.flowThinkingToggle && elements.flowThinkingToggle.parentElement) {
-      elements.flowThinkingToggle.parentElement.style.display = 'inline-flex';
-    }
-  } else {
-    elements.flowModeBtnQuestions.classList.remove('active');
-    elements.flowModeBtnTerms.classList.add('active');
-    if (elements.flowThinkingToggle && elements.flowThinkingToggle.parentElement) {
-      elements.flowThinkingToggle.parentElement.style.display = 'none';
-    }
-  }
-
-  loadAudioFlowItems();
-}
-
-function loadAudioFlowItems() {
-  const cat = elements.flowCategorySelect ? elements.flowCategorySelect.value : 'all';
-  state.audioFlow.category = cat;
-
-  if (state.audioFlow.mode === 'questions') {
-    if (cat === 'all') {
-      state.audioFlow.items = [...state.questions];
-    } else {
-      state.audioFlow.items = state.questions.filter(q => q.category === cat);
-    }
-  } else {
-    if (cat === 'all') {
-      state.audioFlow.items = [...state.terms];
-    } else {
-      state.audioFlow.items = state.terms.filter(t => t.category === cat);
-    }
-  }
-
-  state.audioFlow.currentIndex = 0;
-  updateAudioFlowCard();
-  renderAudioFlowPlaylist();
-}
-
-function updateAudioFlowCard() {
-  const items = state.audioFlow.items;
-  const idx = state.audioFlow.currentIndex;
-
-  if (!items || items.length === 0) {
-    elements.flowCounterText.textContent = '0 / 0 項目';
-    elements.flowCurrentCategoryPill.textContent = '該当なし';
-    elements.flowProgressBarFill.style.width = '0%';
-    elements.flowItemNum.textContent = 'なし';
-    elements.flowStepPhase.textContent = '項目がありません';
-    elements.flowItemTitle.textContent = '該当する問題・用語がありません。別の分野を選択してください。';
-    if (elements.flowChoicesList) {
-      elements.flowChoicesList.innerHTML = '';
-      elements.flowChoicesList.classList.add('hidden');
-    }
-    elements.flowItemAnswerBox.classList.add('hidden');
-    elements.flowItemExplanationBox.classList.add('hidden');
-    return;
-  }
-
-  const current = items[idx];
-  elements.flowCounterText.textContent = `${idx + 1} / ${items.length} 項目`;
-  elements.flowCurrentCategoryPill.textContent = current.category || '全般';
-  const progressPercent = Math.round(((idx + 1) / items.length) * 100);
-  elements.flowProgressBarFill.style.width = `${progressPercent}%`;
-
-  if (state.audioFlow.mode === 'questions') {
-    elements.flowItemNum.textContent = `第 ${idx + 1} 問`;
-    elements.flowItemTitle.textContent = current.question;
-    const ansIdx = current.answer !== undefined ? current.answer : 0;
-    const ansText = current.choices && current.choices[ansIdx] ? current.choices[ansIdx] : '';
-    elements.flowItemAnswerBox.querySelector('.flow-ans-label').textContent = '正解:';
-    elements.flowItemAnswerText.textContent = `選択肢 ${ansIdx + 1} : ${ansText}`;
-    elements.flowItemExplanationText.innerHTML = renderTextWithTermLinks(current.explanation || '');
-
-    // 正解・詳細解説・選択肢ハイライトを表示するのは「解説フェーズ(explanation)」のみ
-    // 問題文読み上げ中(question)、思考中(thinking)、未再生(idle)の時は正解を絶対に表示しない
-    const isAnswerPhase = (state.audioFlow.phase === 'explanation');
-
-    // 選択肢一覧の描画
-    if (elements.flowChoicesList) {
-      elements.flowChoicesList.innerHTML = '';
-      elements.flowChoicesList.classList.remove('hidden');
-
-      if (current.choices && Array.isArray(current.choices)) {
-        current.choices.forEach((choice, cIdx) => {
-          const choiceEl = document.createElement('div');
-          const isCorrect = isAnswerPhase && (cIdx === ansIdx);
-          choiceEl.className = `flow-choice-item ${isCorrect ? 'correct' : ''}`;
-          choiceEl.innerHTML = `
-            <span class="flow-choice-badge">${cIdx + 1}</span>
-            <span class="flow-choice-text">${escapeHtml(choice)}</span>
-          `;
-          elements.flowChoicesList.appendChild(choiceEl);
-        });
+    const nextWord = () => {
+      if (currentWordIndex.value < wordSessionWords.value.length - 1) {
+        currentWordIndex.value++;
+        hasAnsweredWord.value = false;
+        selectedWordChoice.value = null;
+        showWordGlossary.value = false;
+      } else {
+        // 全問終了！区切り＆振り返り画面へ
+        isWordSessionFinished.value = true;
       }
-    }
+    };
 
-    if (isAnswerPhase) {
-      elements.flowItemAnswerBox.classList.remove('hidden');
-      elements.flowItemExplanationBox.classList.remove('hidden');
-    } else {
-      elements.flowItemAnswerBox.classList.add('hidden');
-      elements.flowItemExplanationBox.classList.add('hidden');
-    }
-  } else {
-    // 重要用語モード（選択肢は非表示）
-    if (elements.flowChoicesList) {
-      elements.flowChoicesList.innerHTML = '';
-      elements.flowChoicesList.classList.add('hidden');
-    }
-    const stars = '★'.repeat(current.importance || 1);
-    elements.flowItemNum.textContent = `重要用語 (${stars})`;
-    elements.flowItemTitle.textContent = current.term;
-    elements.flowItemAnswerBox.querySelector('.flow-ans-label').textContent = '要約:';
-    elements.flowItemAnswerText.textContent = current.summary || '';
-    elements.flowItemExplanationText.innerHTML = renderTextWithTermLinks(current.explanation || '');
-    elements.flowItemAnswerBox.classList.remove('hidden');
-    elements.flowItemExplanationBox.classList.remove('hidden');
-  }
+    const prevWord = () => {
+      if (currentWordIndex.value > 0) {
+        currentWordIndex.value--;
+        const prevW = wordSessionWords.value[currentWordIndex.value];
+        const record = wordAnswers.value[prevW.id];
+        if (record) {
+          hasAnsweredWord.value = true;
+          selectedWordChoice.value = record.choice;
+        } else {
+          hasAnsweredWord.value = false;
+          selectedWordChoice.value = null;
+        }
+        showWordGlossary.value = false;
+      }
+    };
 
-  // プレイリストのアクティブハイライト更新
-  const plItems = elements.flowPlaylist.querySelectorAll('.flow-playlist-item');
-  plItems.forEach((el, i) => {
-    if (i === idx) {
-      el.classList.add('active');
-      el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-    } else {
-      el.classList.remove('active');
-    }
-  });
-}
+    const toggleWordMastered = (id) => {
+      wordMastered.value[id] = !wordMastered.value[id];
+    };
 
-function renderAudioFlowPlaylist() {
-  elements.flowPlaylist.innerHTML = '';
-  const items = state.audioFlow.items;
-  elements.flowListCount.textContent = items.length;
-
-  items.forEach((item, index) => {
-    const div = document.createElement('div');
-    div.className = `flow-playlist-item ${index === state.audioFlow.currentIndex ? 'active' : ''}`;
-
-    const titleText = state.audioFlow.mode === 'questions' ? item.question : item.term;
-    const badgeText = state.audioFlow.mode === 'questions' ? (item.category ? item.category.slice(0, 8) + '...' : '') : `★${item.importance || 1}`;
-
-    div.innerHTML = `
-      <span class="flow-pl-index">#${index + 1}</span>
-      <span class="flow-pl-title" title="${escapeHtml(titleText)}">${escapeHtml(titleText)}</span>
-      <span class="flow-pl-badge">${escapeHtml(badgeText)}</span>
-    `;
-
-    div.addEventListener('click', () => {
-      jumpToAudioFlowItem(index);
+    // 振り返り用集計
+    const wordSessionStats = computed(() => {
+      const total = wordSessionWords.value.length;
+      const records = Object.values(wordAnswers.value);
+      const correctCount = records.filter(r => r.isCorrect).length;
+      const wrongCount = records.filter(r => !r.isCorrect).length;
+      const accuracy = total > 0 ? Math.round((correctCount / total) * 100) : 0;
+      return {
+        total,
+        correctCount,
+        wrongCount,
+        accuracy,
+        maxStreak: maxWordStreak.value
+      };
     });
 
-    elements.flowPlaylist.appendChild(div);
-  });
-}
-
-function jumpToAudioFlowItem(index) {
-  if (state.audioFlow.timerId) {
-    clearTimeout(state.audioFlow.timerId);
-    state.audioFlow.timerId = null;
-  }
-  state.audioFlow.currentIndex = index;
-  state.audioFlow.phase = state.audioFlow.isPlaying
-    ? (state.audioFlow.mode === 'questions' ? 'question' : 'term')
-    : 'idle';
-  updateAudioFlowCard();
-
-  if (state.audioFlow.isPlaying) {
-    playAudioFlowCurrentItem();
-  }
-}
-
-function togglePlayPauseAudioFlow() {
-  if (!state.audioFlow.items || state.audioFlow.items.length === 0) {
-    showToast("⚠️ 再生対象がありません");
-    return;
-  }
-
-  if (!state.audioFlow.isPlaying) {
-    state.audioFlow.isPlaying = true;
-    state.audioFlow.isPaused = false;
-    requestScreenWakeLock();
-    startAudioKeepAlive();
-    playAudioFlowCurrentItem();
-  } else if (state.audioFlow.isPaused) {
-    state.audioFlow.isPaused = false;
-    requestScreenWakeLock();
-    startAudioKeepAlive();
-    elements.btnFlowPlayPause.textContent = '⏸ 一時停止';
-    elements.flowStatusBadge.textContent = '再生中 🔊';
-    elements.flowStatusBadge.className = 'flow-status-badge playing';
-    if (state.tts.synth && state.tts.synth.paused) {
-      state.tts.synth.resume();
-    } else {
-      playAudioFlowCurrentItem();
-    }
-  } else {
-    state.audioFlow.isPaused = true;
-    releaseScreenWakeLock();
-    stopAudioKeepAlive();
-    if (state.audioFlow.timerId) {
-      clearTimeout(state.audioFlow.timerId);
-      state.audioFlow.timerId = null;
-    }
-    if (state.tts.synth) {
-      state.tts.synth.pause();
-    }
-    elements.btnFlowPlayPause.textContent = '▶ 再開する';
-    elements.flowStatusBadge.textContent = '一時停止 ⏸';
-    elements.flowStatusBadge.className = 'flow-status-badge paused';
-  }
-}
-
-let currentFlowUtterance = null;
-
-// 読み上げ中の該当箇所ハイライト＆自動スクロール
-function highlightFlowElement(targetType, choiceIndex = null) {
-  clearFlowHighlights();
-
-  let elToScroll = null;
-
-  if (targetType === 'question' || targetType === 'term-title') {
-    if (elements.flowItemTitle) {
-      elements.flowItemTitle.classList.add('flow-reading-active');
-      elToScroll = elements.flowCurrentCard || elements.flowItemTitle;
-    }
-  } else if (targetType === 'choice' && choiceIndex !== null) {
-    if (elements.flowChoicesList) {
-      const choiceItems = elements.flowChoicesList.querySelectorAll('.flow-choice-item');
-      if (choiceItems[choiceIndex]) {
-        choiceItems[choiceIndex].classList.add('flow-reading-active');
-        elToScroll = choiceItems[choiceIndex];
+    const reviewedWordList = computed(() => {
+      let list = wordSessionWords.value.map(w => {
+        return {
+          word: w,
+          record: wordAnswers.value[w.id] || { choice: null, isCorrect: false }
+        };
+      });
+      if (wordReviewFilter.value === 'wrong') {
+        list = list.filter(item => !item.record.isCorrect);
+      } else if (wordReviewFilter.value === 'correct') {
+        list = list.filter(item => item.record.isCorrect);
       }
-    }
-  } else if (targetType === 'answer' || targetType === 'term-summary') {
-    if (elements.flowItemAnswerBox) {
-      elements.flowItemAnswerBox.classList.add('flow-reading-active');
-      elToScroll = elements.flowItemAnswerBox;
-    }
-  } else if (targetType === 'explanation' || targetType === 'term-explanation') {
-    if (elements.flowItemExplanationBox) {
-      elements.flowItemExplanationBox.classList.add('flow-reading-active');
-      elToScroll = elements.flowItemExplanationBox;
-    }
-  }
+      return list;
+    });
 
-  // 自動スクロール（画面外にある場合はスムーズに画面内へスクロール）
-  if (elToScroll) {
-    elToScroll.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  }
-}
-
-function clearFlowHighlights() {
-  if (elements.flowItemTitle) elements.flowItemTitle.classList.remove('flow-reading-active');
-  if (elements.flowItemAnswerBox) elements.flowItemAnswerBox.classList.remove('flow-reading-active');
-  if (elements.flowItemExplanationBox) elements.flowItemExplanationBox.classList.remove('flow-reading-active');
-  if (elements.flowChoicesList) {
-    const choiceItems = elements.flowChoicesList.querySelectorAll('.flow-choice-item');
-    choiceItems.forEach(item => item.classList.remove('flow-reading-active'));
-  }
-}
-
-function stopAudioFlow() {
-  releaseScreenWakeLock();
-  stopAudioKeepAlive();
-
-  if (state.audioFlow.timerId) {
-    clearTimeout(state.audioFlow.timerId);
-    state.audioFlow.timerId = null;
-  }
-
-  if (currentFlowUtterance) {
-    currentFlowUtterance.onend = null;
-    currentFlowUtterance.onerror = null;
-    currentFlowUtterance = null;
-  }
-
-  if (state.tts.synth) {
-    state.tts.synth.cancel();
-  }
-
-  clearFlowHighlights();
-  state.audioFlow.isPlaying = false;
-  state.audioFlow.isPaused = false;
-  state.audioFlow.phase = 'idle';
-
-  elements.flowStatusBadge.textContent = '⏹ 停止中';
-  elements.flowStatusBadge.className = 'flow-status-badge';
-  elements.btnFlowPlayPause.textContent = '▶ 聞き流しを開始';
-  elements.flowStepPhase.textContent = '「聞き流しを開始」ボタンを押すと音声学習がスタートします';
-  updateAudioFlowCard();
-}
-
-function playNextAudioFlow(isAuto = false) {
-  if (state.audioFlow.timerId) {
-    clearTimeout(state.audioFlow.timerId);
-    state.audioFlow.timerId = null;
-  }
-
-  if (currentFlowUtterance) {
-    currentFlowUtterance.onend = null;
-    currentFlowUtterance.onerror = null;
-    currentFlowUtterance = null;
-  }
-
-  if (state.tts.synth) {
-    state.tts.synth.cancel();
-  }
-
-  const items = state.audioFlow.items;
-  if (state.audioFlow.currentIndex < items.length - 1) {
-    state.audioFlow.currentIndex++;
-    state.audioFlow.phase = state.audioFlow.mode === 'questions' ? 'question' : 'term';
-    updateAudioFlowCard();
-    if (state.audioFlow.isPlaying) {
-      playAudioFlowCurrentItem();
-    }
-  } else {
-    if (state.audioFlow.repeat) {
-      state.audioFlow.currentIndex = 0;
-      state.audioFlow.phase = state.audioFlow.mode === 'questions' ? 'question' : 'term';
-      updateAudioFlowCard();
-      showToast("🔁 最初からループ再生します");
-      if (state.audioFlow.isPlaying) {
-        playAudioFlowCurrentItem();
-      }
-    } else {
-      stopAudioFlow();
-      showToast("🎉 すべての項目の聞き流しが完了しました！");
-    }
-  }
-}
-
-function playPrevAudioFlow() {
-  if (state.audioFlow.timerId) {
-    clearTimeout(state.audioFlow.timerId);
-    state.audioFlow.timerId = null;
-  }
-
-  if (currentFlowUtterance) {
-    currentFlowUtterance.onend = null;
-    currentFlowUtterance.onerror = null;
-    currentFlowUtterance = null;
-  }
-
-  if (state.tts.synth) {
-    state.tts.synth.cancel();
-  }
-
-  if (state.audioFlow.currentIndex > 0) {
-    state.audioFlow.currentIndex--;
-  } else {
-    state.audioFlow.currentIndex = state.audioFlow.items.length - 1;
-  }
-  state.audioFlow.phase = state.audioFlow.mode === 'questions' ? 'question' : 'term';
-  updateAudioFlowCard();
-  if (state.audioFlow.isPlaying) {
-    playAudioFlowCurrentItem();
-  }
-}
-
-function speakTextFlow(text, targetIndex, onEnd) {
-  if (!state.tts.synth) {
-    if (onEnd && state.audioFlow.isPlaying && !state.audioFlow.isPaused && state.audioFlow.currentIndex === targetIndex) {
-      onEnd();
-    }
-    return;
-  }
-
-  // 以前のタイマーを停止
-  if (state.audioFlow.timerId) {
-    clearTimeout(state.audioFlow.timerId);
-    state.audioFlow.timerId = null;
-  }
-
-  // 既存の発話イベントハンドラを解除してからキャンセル（キャンセルによる誤発火を完全に遮断）
-  if (currentFlowUtterance) {
-    currentFlowUtterance.onend = null;
-    currentFlowUtterance.onerror = null;
-    currentFlowUtterance = null;
-  }
-  state.tts.synth.cancel();
-
-  const cleanText = cleanTextForSpeech(text);
-  if (!cleanText || cleanText.trim() === '') {
-    if (onEnd && state.audioFlow.isPlaying && !state.audioFlow.isPaused && state.audioFlow.currentIndex === targetIndex) {
-      onEnd();
-    }
-    return;
-  }
-
-  const utterance = new SpeechSynthesisUtterance(cleanText);
-  currentFlowUtterance = utterance;
-
-  if (state.tts.voice) utterance.voice = state.tts.voice;
-  utterance.lang = 'ja-JP';
-  utterance.rate = state.audioFlow.speed || 1.0;
-  utterance.pitch = 1.0;
-
-  let hasEnded = false;
-
-  utterance.onend = () => {
-    if (hasEnded) return;
-    hasEnded = true;
-    currentFlowUtterance = null;
-
-    if (state.audioFlow.isPlaying && !state.audioFlow.isPaused && state.audioFlow.currentIndex === targetIndex) {
-      if (onEnd) onEnd();
-    }
-  };
-
-  utterance.onerror = (e) => {
-    if (hasEnded) return;
-    hasEnded = true;
-    currentFlowUtterance = null;
-
-    // スキップや一時停止等による正常な中断・キャンセルの場合は絶対に次へスキップしない
-    if (e.error === 'interrupted' || e.error === 'canceled') {
-      return;
-    }
-
-    console.warn("AudioFlow TTS Error:", e.error);
-    // エラー時の暴走を防ぐため、1.5秒待ってから次へ進む
-    if (state.audioFlow.isPlaying && !state.audioFlow.isPaused && state.audioFlow.currentIndex === targetIndex) {
-      state.audioFlow.timerId = setTimeout(() => {
-        if (state.audioFlow.isPlaying && !state.audioFlow.isPaused && state.audioFlow.currentIndex === targetIndex) {
-          if (onEnd) onEnd();
+    // セクタ（工種）別カウント
+    const wordSectors = computed(() => {
+      const counts = {
+        'すべて': allWords.value.length,
+        '躯体施工': 0,
+        '仕上施工': 0,
+        '施工管理法': 0,
+        '法規': 0
+      };
+      allWords.value.forEach(w => {
+        if (counts[w.category] !== undefined) {
+          counts[w.category]++;
         }
-      }, 1500);
+      });
+      return [
+        { id: 'すべて', name: '🌐 全工種総合', count: counts['すべて'], icon: '🌐' },
+        { id: '躯体施工', name: '🏗 躯体施工', count: counts['躯体施工'], icon: '🏗' },
+        { id: '仕上施工', name: '🎨 仕上施工', count: counts['仕上施工'], icon: '🎨' },
+        { id: '施工管理法', name: '⏱ 施工管理法', count: counts['施工管理法'], icon: '⏱' },
+        { id: '法規', name: '⚖️ 法規', count: counts['法規'], icon: '⚖️' }
+      ];
+    });
+
+    const selectSector = (sectorId) => {
+      wordFilterCategory.value = sectorId;
+      startWordSession();
+    };
+
+    const finishWordSessionEarly = () => {
+      isWordSessionFinished.value = true;
+      if (isAutoPlay.value) stopSpeech();
+    };
+
+    // 間違えた単語だけ再挑戦
+    const retryWrongWords = () => {
+      const wrongs = wordSessionWords.value.filter(w => {
+        const rec = wordAnswers.value[w.id];
+        return rec && !rec.isCorrect;
+      });
+      if (wrongs.length === 0) return;
+      startWordSession(wrongs);
+    };
+
+    watch([wordFilterCategory, wordSessionCountOption, isWordRandom], () => {
+      startWordSession();
+    });
+
+    // ==========================================
+    // 🔊 音声学習・読み上げ（Web Speech API & 発音正規化）
+    // ==========================================
+    const isSpeechSupported = ref('speechSynthesis' in window);
+    const isSpeaking = ref(false);
+    const isAutoPlay = ref(false); // 車両通勤・即解ワード自動連続耳学モード
+    const isReviewAutoPlay = ref(false); // 即解ワード振り返り耳学モード
+    const currentReviewSpeechIndex = ref(0);
+
+    // 🎧 全モード聞き流し・耳学ステート
+    const isExamAutoPlay = ref(false); // 実戦テスト進行中聞き流し
+    const isExamReviewAutoPlay = ref(false); // 採点結果・誤答/要復習聞き流し
+    const currentExamReviewSpeechIndex = ref(0);
+    const isQuizAutoPlay = ref(false); // 工種別演習聞き流し
+    const isCheatAutoPlay = ref(false); // 罠チートシート連続聞き流し
+    const currentCheatSpeechIndex = ref(0);
+
+    const speechRate = ref(1.0); // 0.85, 1.0, 1.2, 1.4
+    let currentUtterance = null;
+    let autoPlayTimer = null;
+    let reviewAutoTimer = null;
+    let examAutoTimer = null;
+    let examReviewAutoTimer = null;
+    let quizAutoTimer = null;
+    let cheatAutoTimer = null;
+
+    // 正しい発音のためのテキスト正規化エンジン
+    // 例: 「1/5」→「5分の1」（日付の1月5日と誤読させない）
+    const normalizeSpeechText = (text) => {
+      if (!text) return "";
+      let s = String(text);
+
+      // 1. 分数表記 (1/5 -> 5分の1, 1/4 -> 4分の1, etc.)
+      s = s.replace(/(\d+)\s*[\/／]\s*(\d+)/g, "$2分の$1");
+
+      // 2. 日数・日時の正しい読み分け（ついたち、よんにち、ななにち等の誤読防止）
+      s = s.replace(/1日あたり/g, "いちにちあたり");
+      s = s.replace(/1日の/g, "いちにちの");
+      s = s.replace(/1日(?![月0-9])/g, "いちにち");
+      s = s.replace(/4日以内/g, "よっか以内");
+      s = s.replace(/4日/g, "よっか");
+      s = s.replace(/7日以内/g, "なのか以内");
+      s = s.replace(/7日/g, "なのか");
+      s = s.replace(/14日以上/g, "じゅうよっか以上");
+      s = s.replace(/14日/g, "じゅうよっか");
+      s = s.replace(/3日以上/g, "みっか以上");
+      s = s.replace(/3日/g, "みっか");
+      s = s.replace(/5日以上/g, "いつか以上");
+      s = s.replace(/5日/g, "いつか");
+      s = s.replace(/6ヶ月/g, "ろっかげつ");
+      s = s.replace(/6回/g, "ろっかい");
+      s = s.replace(/2現場/g, "にげんば");
+
+      // 3. 単位・数値記号
+      s = s.replace(/N\s*[\/／]\s*mm[²2]/g, "ニュートン毎平方ミリ");
+      s = s.replace(/kg\s*[\/／]\s*m[³3]/g, "キログラム毎立方メートル");
+      s = s.replace(/m[³3]/g, "立方メートル");
+      s = s.replace(/m[²2]/g, "平方メートル");
+      s = s.replace(/kN/g, "キロニュートン");
+      s = s.replace(/℃/g, "度");
+      s = s.replace(/%/g, "パーセント");
+      s = s.replace(/±/g, "プラスマイナス");
+      s = s.replace(/(\d+)\s*mm/g, "$1ミリ");
+      s = s.replace(/(\d+)\s*cm/g, "$1センチ");
+      s = s.replace(/(\d+(\.\d+)?)\s*m(?![a-zA-Z])/g, "$1メートル");
+
+      // 4. 専門用語・法令・誤読防止辞書
+      s = s.replace(/躯体/g, "くたい");
+      s = s.replace(/仕上/g, "しあげ");
+      s = s.replace(/36協定/g, "サブロク協定");
+      s = s.replace(/せき板/g, "せきいた");
+      s = s.replace(/建地/g, "たてじ");
+      s = s.replace(/幅木/g, "はばき");
+      s = s.replace(/巾木/g, "はばき");
+      s = s.replace(/中さん/g, "なかさん");
+      s = s.replace(/特定元方事業者/g, "特定もとかた事業者");
+      s = s.replace(/関係請負人/g, "かんけいうけおいにん");
+      s = s.replace(/一括下請負/g, "いっかつしたうけおい");
+      s = s.replace(/母屋/g, "もや");
+      s = s.replace(/折板/g, "せっぱん");
+      s = s.replace(/豆板/g, "まめいた");
+      s = s.replace(/ジャンカ/g, "ジャンカ");
+      s = s.replace(/山留め/g, "やまどめ");
+      s = s.replace(/切梁/g, "きりばり");
+      s = s.replace(/腹起し/g, "はらおこし");
+      s = s.replace(/親綱/g, "おやづな");
+      s = s.replace(/目荒らし/g, "めあらし");
+      s = s.replace(/裏足/g, "うらあし");
+      s = s.replace(/梁底/g, "はりぞこ");
+      s = s.replace(/梁側/g, "はりがわ");
+      s = s.replace(/梁下/g, "はりした");
+      s = s.replace(/梁/g, "はり");
+      s = s.replace(/柱/g, "はしら");
+      s = s.replace(/打重ね/g, "うちがさね");
+      s = s.replace(/打継ぎ/g, "うちつぎ");
+      s = s.replace(/打込み/g, "うちこみ");
+      s = s.replace(/荷卸し/g, "におろし");
+      s = s.replace(/練混ぜ/g, "ねりまぜ");
+      s = s.replace(/水和反応/g, "すいわはんのう");
+      s = s.replace(/存置/g, "ぞんち");
+      s = s.replace(/盛替え/g, "もりかえ");
+      s = s.replace(/脱型/g, "だっけい");
+      s = s.replace(/特例監理技術者/g, "とくれい かんりぎじゅつしゃ");
+      s = s.replace(/監理技術者補佐/g, "かんりぎじゅつしゃ ほさ");
+      s = s.replace(/適判/g, "てきはん");
+      s = s.replace(/4号/g, "よんごう");
+      s = s.replace(/1級/g, "いっきゅう");
+      s = s.replace(/2級/g, "にきゅう");
+      s = s.replace(/技士補/g, "ぎしほ");
+      s = s.replace(/安衛法/g, "あんえいほう");
+      s = s.replace(/安衛則/g, "あんえいそく");
+      s = s.replace(/労基法/g, "ろうきほう");
+      s = s.replace(/建基法/g, "けんきほう");
+      s = s.replace(/ALC/g, "エーエルシー");
+      s = s.replace(/LGS/g, "エルジーエス");
+      s = s.replace(/RC/g, "アールシー");
+      s = s.replace(/JASS/g, "ジャス");
+      s = s.replace(/QC/g, "キューシー");
+      s = s.replace(/Fc/g, "エフシー");
+      s = s.replace(/PC鋼線/g, "ピーシーこうせん");
+      s = s.replace(/PC/g, "ピーシー");
+      s = s.replace(/UCL/g, "ユーシーエル");
+      s = s.replace(/LCL/g, "エルシーエル");
+      s = s.replace(/SN材/g, "エスエヌざい");
+      s = s.replace(/SN400B/g, "エスエヌ よんひゃく ビー");
+      s = s.replace(/SN490B/g, "エスエヌ よんきゅうまる ビー");
+      s = s.replace(/合板/g, "ごうはん");
+      s = s.replace(/段葺き/g, "だんぶき");
+      s = s.replace(/葺き/g, "ふき");
+      s = s.replace(/葺く/g, "ふく");
+      s = s.replace(/瓦棒/g, "かわらぼう");
+      s = s.replace(/野地板/g, "のじいた");
+      s = s.replace(/垂木/g, "たるき");
+      s = s.replace(/棟木/g, "むなぎ");
+      s = s.replace(/胴縁/g, "どうぶち");
+      s = s.replace(/帯金物/g, "おびかなもの");
+      s = s.replace(/羽子板ボルト/g, "はごいたボルト");
+      s = s.replace(/短冊金物/g, "たんざくかなもの");
+      s = s.replace(/筋かい/g, "すじかい");
+      s = s.replace(/筋交い/g, "すじかい");
+      s = s.replace(/筋交/g, "すじかい");
+      s = s.replace(/間柱/g, "まばしら");
+      s = s.replace(/通し柱/g, "とおしばしら");
+      s = s.replace(/管柱/g, "くだばしら");
+      s = s.replace(/土台/g, "どだい");
+      s = s.replace(/布基礎/g, "ぬのきそ");
+      s = s.replace(/べた基礎/g, "べたきそ");
+      s = s.replace(/地業/g, "じぎょう");
+      s = s.replace(/床付け/g, "とこづけ");
+      s = s.replace(/根切り/g, "ねぎり");
+      s = s.replace(/埋戻し/g, "うめもどし");
+      s = s.replace(/割栗石/g, "わりぐりいし");
+      s = s.replace(/目地/g, "めじ");
+      s = s.replace(/面木/g, "めんき");
+      s = s.replace(/隅肉/g, "すみにく");
+      s = s.replace(/開先/g, "かいさき");
+      s = s.replace(/余盛り/g, "よもり");
+      s = s.replace(/余盛/g, "よもり");
+      s = s.replace(/撓み/g, "たわみ");
+      s = s.replace(/撓り/g, "しなり");
+      s = s.replace(/反り/g, "そり");
+      s = s.replace(/粗骨材/g, "そこつざい");
+      s = s.replace(/細骨材/g, "さいこつざい");
+      s = s.replace(/骨材/g, "こつざい");
+      s = s.replace(/単位水量/g, "たんいすいりょう");
+      s = s.replace(/水セメント比/g, "すいセメントひ");
+      s = s.replace(/空気量/g, "くうきりょう");
+      s = s.replace(/スランプ/g, "スランプ");
+      s = s.replace(/呼び強度/g, "よびきょうど");
+      s = s.replace(/設計基準強度/g, "せっけいきじゅんきょうど");
+      s = s.replace(/朝顔/g, "あさがお");
+      s = s.replace(/巾/g, "はば");
+      s = s.replace(/跨ぎ/g, "またぎ");
+      s = s.replace(/踏み面/g, "ふみづら");
+      s = s.replace(/蹴上げ/g, "けあげ");
+      s = s.replace(/踊場/g, "おどりば");
+      s = s.replace(/手摺/g, "てすり");
+      s = s.replace(/踊り場/g, "おどりば");
+      s = s.replace(/勾配/g, "こうばい");
+      s = s.replace(/不適当/g, "ふてきとう");
+      s = s.replace(/誤っている/g, "あやまっている");
+
+      return s;
+    };
+
+    // 音声一覧キャッシュ＆Android Chrome対応
+    const availableVoices = ref([]);
+    const updateVoices = () => {
+      if (!window.speechSynthesis) return;
+      availableVoices.value = window.speechSynthesis.getVoices();
+    };
+
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      updateVoices();
+      if (window.speechSynthesis.onvoiceschanged !== undefined) {
+        window.speechSynthesis.onvoiceschanged = updateVoices;
+      }
     }
-  };
 
-  state.tts.synth.speak(utterance);
-}
+    // モバイル用音声アンロック
+    let isAudioUnlocked = false;
+    const unlockAudioSpeech = () => {
+      if (isAudioUnlocked || !window.speechSynthesis) return;
+      try {
+        window.speechSynthesis.resume();
+        isAudioUnlocked = true;
+      } catch (e) {}
+    };
 
-function playAudioFlowCurrentItem() {
-  const items = state.audioFlow.items;
-  const idx = state.audioFlow.currentIndex;
-  if (!items || items.length === 0 || idx >= items.length) return;
+    // 画面タップ時にアンロックを仕込む
+    if (typeof window !== 'undefined') {
+      window.addEventListener('touchstart', unlockAudioSpeech, { once: true, passive: true });
+      window.addEventListener('click', unlockAudioSpeech, { once: true, passive: true });
+    }
 
-  const current = items[idx];
+    const getJapaneseVoice = () => {
+      if (!window.speechSynthesis) return null;
+      const list = availableVoices.value.length > 0 ? availableVoices.value : window.speechSynthesis.getVoices();
+      return list.find(v => v.lang === 'ja-JP' || v.lang === 'ja_JP' || v.lang.startsWith('ja')) || null;
+    };
 
-  // まず状態フェーズを問題読み上げに設定
-  state.audioFlow.phase = state.audioFlow.mode === 'questions' ? 'question' : 'term';
+    // ==========================================
+    // 🔆 画面スリープ防止（Wake Lock API - 音声と競合しない標準方式）
+    // ==========================================
+    const isWakeLockSupported = ref(typeof navigator !== 'undefined' && 'wakeLock' in navigator);
+    const isWakeLockActive = ref(false);
+    const wakeLockManualOverride = ref(false);
+    let wakeLockSentinel = null;
 
-  // カードを更新（phase='question'なので、正解ハイライト・正解ボックス・解説ボックスが完全に非表示になる）
-  updateAudioFlowCard();
-  clearFlowHighlights();
+    const isAnyAutoPlayActive = () => {
+      return isAutoPlay.value || isReviewAutoPlay.value || isExamAutoPlay.value || isExamReviewAutoPlay.value || isQuizAutoPlay.value || isCheatAutoPlay.value;
+    };
 
-  // スリープ防止 & キープアライブ起動
-  requestScreenWakeLock();
-  const currentTitle = state.audioFlow.mode === 'questions' ? `第${idx + 1}問: ${current.question.slice(0, 25)}...` : `用語: ${current.term}`;
-  startAudioKeepAlive(currentTitle);
-
-  elements.btnFlowPlayPause.textContent = '⏸ 一時停止';
-  elements.flowStatusBadge.textContent = '再生中 🔊';
-  elements.flowStatusBadge.className = 'flow-status-badge playing';
-
-  if (state.audioFlow.mode === 'questions') {
-    elements.flowStepPhase.textContent = '🔊 問題文を読み上げ中...';
-
-    // 1. 問題文をハイライト＆自動スクロール＆読み上げ
-    highlightFlowElement('question');
-    const qSpeech = `第 ${idx + 1} 問。${current.question}。`;
-
-    speakTextFlow(qSpeech, idx, () => {
-      // 2. 選択肢を1つずつハイライト＆自動スクロールしながら順番に読み上げ
-      const choices = current.choices || [];
-      if (choices.length > 0) {
-        let choiceIdx = 0;
-
-        function readNextChoice() {
-          if (!state.audioFlow.isPlaying || state.audioFlow.isPaused || state.audioFlow.currentIndex !== idx) {
-            return;
-          }
-          if (choiceIdx < choices.length) {
-            highlightFlowElement('choice', choiceIdx);
-            elements.flowStepPhase.textContent = `🔊 選択肢 ${choiceIdx + 1} を読み上げ中...`;
-            const prefix = choiceIdx === 0 ? '選択肢。' : '';
-            const cSpeech = `${prefix}${choiceIdx + 1} 番、${choices[choiceIdx]}。`;
-            choiceIdx++;
-            speakTextFlow(cSpeech, idx, () => {
-              readNextChoice();
+    const acquireWakeLock = async () => {
+      if (typeof navigator !== 'undefined' && 'wakeLock' in navigator) {
+        try {
+          if (!wakeLockSentinel) {
+            wakeLockSentinel = await navigator.wakeLock.request('screen');
+            isWakeLockActive.value = true;
+            wakeLockSentinel.addEventListener('release', () => {
+              wakeLockSentinel = null;
+              if (!wakeLockManualOverride.value && !isAnyAutoPlayActive()) {
+                isWakeLockActive.value = false;
+              }
             });
-          } else {
-            // 全選択肢の読み上げ終了 -> シンキングタイムへ
-            clearFlowHighlights();
-            startThinkingPhase(current, idx);
+          }
+        } catch (err) {
+          console.log('[WakeLock] Request notice:', err);
+        }
+      }
+    };
+
+    const releaseWakeLock = async () => {
+      if (wakeLockManualOverride.value) return;
+      if (wakeLockSentinel) {
+        try {
+          await wakeLockSentinel.release();
+        } catch (e) {}
+        wakeLockSentinel = null;
+      }
+      isWakeLockActive.value = false;
+    };
+
+    const toggleManualWakeLock = async () => {
+      wakeLockManualOverride.value = !wakeLockManualOverride.value;
+      if (wakeLockManualOverride.value) {
+        await acquireWakeLock();
+      } else {
+        if (!isAnyAutoPlayActive()) {
+          await releaseWakeLock();
+        }
+      }
+    };
+
+    // 画面復帰時の自動再取得
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', async () => {
+        if (document.visibilityState === 'visible') {
+          if (wakeLockManualOverride.value || isAnyAutoPlayActive()) {
+            await acquireWakeLock();
           }
         }
-
-        readNextChoice();
-      } else {
-        // 選択肢がない場合 -> シンキングタイムへ
-        clearFlowHighlights();
-        startThinkingPhase(current, idx);
-      }
-    });
-
-  } else {
-    // 重要用語モード
-    state.audioFlow.phase = 'term';
-    elements.flowStepPhase.textContent = '📖 用語名を読み上げ中...';
-
-    // 1. 用語名をハイライト＆自動スクロール＆読み上げ
-    highlightFlowElement('term-title');
-    const termSpeech = `用語、${current.term}。`;
-
-    speakTextFlow(termSpeech, idx, () => {
-      if (!state.audioFlow.isPlaying || state.audioFlow.isPaused || state.audioFlow.currentIndex !== idx) return;
-
-      // 2. 要約をハイライト＆自動スクロール＆読み上げ
-      elements.flowStepPhase.textContent = '📖 要約を読み上げ中...';
-      highlightFlowElement('term-summary');
-      const summarySpeech = `要約。${current.summary || ''}。`;
-
-      speakTextFlow(summarySpeech, idx, () => {
-        if (!state.audioFlow.isPlaying || state.audioFlow.isPaused || state.audioFlow.currentIndex !== idx) return;
-
-        // 3. 詳細解説をハイライト＆自動スクロール＆読み上げ
-        elements.flowStepPhase.textContent = '📖 詳細解説を読み上げ中...';
-        highlightFlowElement('term-explanation');
-        const expSpeech = `詳細解説。${current.explanation || ''}。`;
-
-        speakTextFlow(expSpeech, idx, () => {
-          clearFlowHighlights();
-          state.audioFlow.timerId = setTimeout(() => {
-            playNextAudioFlow(true);
-          }, 1500);
-        });
       });
-    });
-  }
-}
+    }
 
-function startThinkingPhase(current, idx) {
-  if (!state.audioFlow.isPlaying || state.audioFlow.isPaused || state.audioFlow.currentIndex !== idx) return;
+    const stopSpeech = () => {
+      if (window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
+      if (autoPlayTimer) {
+        clearTimeout(autoPlayTimer);
+        autoPlayTimer = null;
+      }
+      if (reviewAutoTimer) {
+        clearTimeout(reviewAutoTimer);
+        reviewAutoTimer = null;
+      }
+      if (examAutoTimer) {
+        clearTimeout(examAutoTimer);
+        examAutoTimer = null;
+      }
+      if (examReviewAutoTimer) {
+        clearTimeout(examReviewAutoTimer);
+        examReviewAutoTimer = null;
+      }
+      if (quizAutoTimer) {
+        clearTimeout(quizAutoTimer);
+        quizAutoTimer = null;
+      }
+      if (cheatAutoTimer) {
+        clearTimeout(cheatAutoTimer);
+        cheatAutoTimer = null;
+      }
+      isSpeaking.value = false;
+      isAutoPlay.value = false;
+      isReviewAutoPlay.value = false;
+      isExamAutoPlay.value = false;
+      isExamReviewAutoPlay.value = false;
+      isQuizAutoPlay.value = false;
+      isCheatAutoPlay.value = false;
+      releaseWakeLock();
+    };
 
-  if (state.audioFlow.thinkingTime) {
-    state.audioFlow.phase = 'thinking';
-    updateAudioFlowCard();
-    clearFlowHighlights();
-    elements.flowStepPhase.textContent = '⏱️ シンキングタイム（3秒間）...';
-    elements.flowStatusBadge.textContent = '思考タイム ⏱️';
-    elements.flowStatusBadge.className = 'flow-status-badge thinking';
+    // 音声テスト＆強制アンロック関数
+    const testSpeech = () => {
+      stopSpeech();
+      speakText('音声テストです。正常に読み上げが行われています。マナーモードがオフになっていることをご確認ください。');
+    };
 
-    state.audioFlow.timerId = setTimeout(() => {
-      speakAnswerAndExplanation(current, idx);
-    }, 3000);
-  } else {
-    speakAnswerAndExplanation(current, idx);
-  }
-}
-
-function speakAnswerAndExplanation(current, idx) {
-  if (!state.audioFlow.isPlaying || state.audioFlow.isPaused || state.audioFlow.currentIndex !== idx) {
-    return;
-  }
-
-  state.audioFlow.phase = 'explanation';
-  elements.flowStepPhase.textContent = '💡 正解を発表中...';
-  elements.flowStatusBadge.textContent = '正解・解説 🔊';
-  elements.flowStatusBadge.className = 'flow-status-badge playing';
-  updateAudioFlowCard();
-
-  const ansIdx = current.answer !== undefined ? current.answer : 0;
-  const ansText = current.choices && current.choices[ansIdx] ? current.choices[ansIdx] : '';
-
-  // 1. 正解のハイライト（正解ボックス ＆ 正解選択肢）＆自動スクロール
-  highlightFlowElement('answer');
-  const ansSpeech = `正解は、${ansIdx + 1}番、${ansText}です。`;
-
-  speakTextFlow(ansSpeech, idx, () => {
-    if (!state.audioFlow.isPlaying || state.audioFlow.isPaused || state.audioFlow.currentIndex !== idx) return;
-
-    // 2. 詳細解説のハイライト＆自動スクロール＆読み上げ
-    elements.flowStepPhase.textContent = '💡 詳細解説を読み上げ中...';
-    highlightFlowElement('explanation');
-    const expSpeech = `解説。${current.explanation || ''}。`;
-
-    speakTextFlow(expSpeech, idx, () => {
-      clearFlowHighlights();
-      state.audioFlow.timerId = setTimeout(() => {
-        playNextAudioFlow(true);
-      }, 2000);
-    });
-  });
-}
-
-function startAudioFlowForCategory(categoryName, mode = 'questions') {
-  const tabBtn = document.querySelector('.nav-tab[data-tab="audio-flow-tab"]');
-  if (tabBtn) tabBtn.click();
-
-  setAudioFlowMode(mode);
-
-  if (elements.flowCategorySelect) {
-    elements.flowCategorySelect.value = categoryName || 'all';
-  }
-  loadAudioFlowItems();
-
-  state.audioFlow.isPlaying = true;
-  state.audioFlow.isPaused = false;
-  playAudioFlowCurrentItem();
-  showToast(`🎧 「${categoryName || '全体'}」の聞き流し学習を開始しました`);
-}
-
-window.startAudioFlowForCategory = startAudioFlowForCategory;
-
-// ==========================================
-// イベントリスナー設定
-// ==========================================
-function setupEventListeners() {
-  // 聞き流しモード イベント
-  elements.flowModeBtnQuestions.addEventListener('click', () => setAudioFlowMode('questions'));
-  elements.flowModeBtnTerms.addEventListener('click', () => setAudioFlowMode('terms'));
-
-  elements.flowCategorySelect.addEventListener('change', () => {
-    stopAudioFlow();
-    loadAudioFlowItems();
-  });
-
-  elements.flowThinkingToggle.addEventListener('change', (e) => {
-    state.audioFlow.thinkingTime = e.target.checked;
-  });
-
-  elements.flowRepeatToggle.addEventListener('change', (e) => {
-    state.audioFlow.repeat = e.target.checked;
-  });
-
-  if (elements.flowWakeLockToggle) {
-    elements.flowWakeLockToggle.addEventListener('change', (e) => {
-      state.audioFlow.preventSleep = e.target.checked;
-      if (e.target.checked) {
-        if (state.audioFlow.isPlaying && !state.audioFlow.isPaused) {
-          requestScreenWakeLock();
+    // 🔄 アプリ最新版更新（キャッシュ完全パージ＆強制最新化）
+    const reloadApp = async () => {
+      try {
+        if ('serviceWorker' in navigator) {
+          const regs = await navigator.serviceWorker.getRegistrations();
+          for (const reg of regs) {
+            await reg.unregister();
+          }
         }
-        showToast("💡 スリープ防止をONにしました（常時点灯）");
-      } else {
-        releaseScreenWakeLock();
-        showToast("スリープ防止をOFFにしました");
+        if ('caches' in window) {
+          const keys = await caches.keys();
+          for (const key of keys) {
+            await caches.delete(key);
+          }
+        }
+        if (typeof indexedDB !== 'undefined') {
+          indexedDB.deleteDatabase('ArchConstructionCBT_DB_v2');
+          indexedDB.deleteDatabase('ArchConstructionCBT_DB_v3');
+          indexedDB.deleteDatabase('ArchConstructionCBT_DB_v4');
+        }
+      } catch (e) {
+        console.warn('Cache purge notice:', e);
       }
-    });
-  }
+      // キャッシュバスター付きリロード
+      const base = window.location.href.split('?')[0].split('#')[0];
+      window.location.href = base + '?t=' + Date.now();
+    };
 
-  elements.flowSpeedSelect.addEventListener('change', (e) => {
-    state.audioFlow.speed = parseFloat(e.target.value);
-    if (state.audioFlow.isPlaying && !state.audioFlow.isPaused) {
-      playAudioFlowCurrentItem();
-    }
-  });
+    // PC Chrome / Edge / Safari / モバイル 全環境対応 超高耐久発話エンジン
+    let activeUtterance = null;
+    let speechKeepAliveInterval = null;
 
-  elements.btnFlowPlayPause.addEventListener('click', togglePlayPauseAudioFlow);
-  elements.btnFlowNext.addEventListener('click', () => playNextAudioFlow(false));
-  elements.btnFlowPrev.addEventListener('click', playPrevAudioFlow);
-  elements.btnFlowStop.addEventListener('click', stopAudioFlow);
-
-  if (elements.btnStartTermsFlow) {
-    elements.btnStartTermsFlow.addEventListener('click', () => {
-      const cat = elements.termsCategoryFilter ? elements.termsCategoryFilter.value : 'all';
-      startAudioFlowForCategory(cat, 'terms');
-    });
-  }
-
-  // 音声コントロールバー
-  elements.btnAudioPlayPause.addEventListener('click', togglePlayPauseSpeech);
-  elements.btnAudioStop.addEventListener('click', stopSpeaking);
-  elements.audioSpeedSelect.addEventListener('change', (e) => {
-    state.tts.rate = parseFloat(e.target.value);
-  });
-
-  // 用語モーダル
-  elements.modalBtnClose.addEventListener('click', closeTermModal);
-  elements.modalBtnOk.addEventListener('click', closeTermModal);
-  elements.termModal.addEventListener('click', (e) => {
-    if (e.target === elements.termModal) closeTermModal();
-  });
-  elements.modalBtnSpeak.addEventListener('click', () => {
-    if (state.activeModalTerm) {
-      speakText(`${state.activeModalTerm.term}。${state.activeModalTerm.summary}。${state.activeModalTerm.details || ''}`, `${state.activeModalTerm.term} の読み上げ`);
-    }
-  });
-
-  // 模試
-  elements.btnStartExam.addEventListener('click', startExam);
-  elements.btnExamRestart.addEventListener('click', () => {
-    stopSpeaking();
-    elements.examResultView.classList.add('hidden');
-    elements.examStartView.classList.remove('hidden');
-  });
-
-  if (elements.btnTogglePalette && elements.paletteCollapsibleContent) {
-    elements.btnTogglePalette.addEventListener('click', () => {
-      const isOpen = elements.paletteCollapsibleContent.classList.toggle('open');
-      if (elements.paletteChevron) {
-        elements.paletteChevron.textContent = isOpen ? '▲' : '▼';
-      }
-    });
-  }
-
-  elements.btnExamPrev.addEventListener('click', () => {
-    if (state.exam.currentIndex > 0) {
-      stopSpeaking();
-      state.exam.currentIndex--;
-      renderCurrentExamQuestion();
-      renderExamPalette();
-      if (window.innerWidth <= 768) {
-        const qCard = document.querySelector('.question-card');
-        if (qCard) qCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
-    }
-  });
-
-  elements.btnExamNext.addEventListener('click', () => {
-    if (state.exam.currentIndex < state.exam.questions.length - 1) {
-      stopSpeaking();
-      state.exam.currentIndex++;
-      renderCurrentExamQuestion();
-      renderExamPalette();
-      if (window.innerWidth <= 768) {
-        const qCard = document.querySelector('.question-card');
-        if (qCard) qCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
-    }
-  });
-
-  elements.btnSpeakExamQ.addEventListener('click', speakCurrentExamQuestion);
-
-  elements.btnFlagToggle.addEventListener('click', () => {
-    const idx = state.exam.currentIndex;
-    state.exam.flags[idx] = !state.exam.flags[idx];
-    renderCurrentExamQuestion(false);
-    renderExamPalette();
-  });
-
-  elements.btnFinishExam.addEventListener('click', () => {
-    const answeredCount = Object.keys(state.exam.answers).length;
-    const total = state.exam.questions.length;
-    if (answeredCount < total) {
-      if (!confirm(`未解答の問題が ${total - answeredCount} 問あります。\n本当に試験を終了して採点しますか？`)) {
+    const speakText = (text, onEndCallback = null) => {
+      if (!isSpeechSupported.value || !window.speechSynthesis) {
+        if (onEndCallback) onEndCallback();
         return;
       }
-    }
-    finishExam();
-  });
 
-  if (elements.btnAbortExam) {
-    elements.btnAbortExam.addEventListener('click', () => {
-      if (confirm('模擬試験を中断して最初の画面に戻りますか？')) {
-        stopSpeaking();
-        if (state.exam.timerInterval) clearInterval(state.exam.timerInterval);
-        if (state.exam.paceInterval) clearInterval(state.exam.paceInterval);
-        document.body.classList.remove('in-exam');
-        elements.examPlayView.classList.add('hidden');
-        elements.examResultView.classList.add('hidden');
-        elements.examStartView.classList.remove('hidden');
+      // 前回のキープアライブタイマー解除
+      if (speechKeepAliveInterval) {
+        clearInterval(speechKeepAliveInterval);
+        speechKeepAliveInterval = null;
+      }
+
+      // Chromeのpauseフリーズ解除
+      try {
+        if (window.speechSynthesis.paused) {
+          window.speechSynthesis.resume();
+        }
+      } catch (e) {}
+
+      // 正しい日本語発音テキストに正規化変換
+      const spokenText = normalizeSpeechText(text);
+      if (!spokenText.trim()) {
+        if (onEndCallback) onEndCallback();
+        return;
+      }
+
+      const utterance = new SpeechSynthesisUtterance(spokenText);
+      utterance.lang = 'ja-JP';
+      utterance.rate = Number(speechRate.value) || 1.0;
+      utterance.pitch = 1.0;
+
+      const jVoice = getJapaneseVoice();
+      if (jVoice) {
+        utterance.voice = jVoice;
+      }
+
+      let hasFinished = false;
+      const finishExecution = () => {
+        if (hasFinished) return;
+        hasFinished = true;
+        isSpeaking.value = false;
+        if (speechKeepAliveInterval) {
+          clearInterval(speechKeepAliveInterval);
+          speechKeepAliveInterval = null;
+        }
+        activeUtterance = null;
+        window.__cbtUtterance = null;
+        if (onEndCallback) onEndCallback();
+      };
+
+      utterance.onstart = () => {
+        isSpeaking.value = true;
+      };
+
+      utterance.onend = () => {
+        finishExecution();
+      };
+
+      utterance.onerror = (e) => {
+        console.warn('[Speech] Utterance error:', e);
+        finishExecution();
+      };
+
+      // ガベージコレクション（GC）による発話中断バグ防止（グローバル参照保持）
+      activeUtterance = utterance;
+      window.__cbtUtterance = utterance;
+
+      // Chromeで15秒以上の長文が途中で勝手に切れるのを防止するキープアライブ
+      speechKeepAliveInterval = setInterval(() => {
+        if (!window.speechSynthesis || !isSpeaking.value) {
+          clearInterval(speechKeepAliveInterval);
+          speechKeepAliveInterval = null;
+          return;
+        }
+        try {
+          if (window.speechSynthesis.paused) {
+            window.speechSynthesis.resume();
+          }
+        } catch (e) {}
+      }, 5000);
+
+      // PC Chromeで即時cancel()すると直後のspeak()まで巻き込んで無音になるバグを回避
+      try {
+        if (window.speechSynthesis.speaking) {
+          window.speechSynthesis.cancel();
+          setTimeout(() => {
+            try {
+              window.speechSynthesis.speak(utterance);
+            } catch (err) {
+              console.error('[Speech] speak retry error:', err);
+              finishExecution();
+            }
+          }, 30);
+        } else {
+          window.speechSynthesis.speak(utterance);
+        }
+      } catch (e) {
+        console.error('[Speech] speak error:', e);
+        try {
+          const fallback = new SpeechSynthesisUtterance(spokenText);
+          fallback.lang = 'ja-JP';
+          fallback.onend = finishExecution;
+          fallback.onerror = finishExecution;
+          window.speechSynthesis.speak(fallback);
+        } catch (e2) {
+          finishExecution();
+        }
+      }
+    };
+
+    // 現在の単語を読み上げる（手動ボタン）
+    const speakCurrentWord = () => {
+      if (isSpeaking.value && !isAutoPlay.value) {
+        stopSpeech();
+        return;
+      }
+      const w = currentWord.value;
+      if (!w || !w.question) return;
+
+      let speechContent = '';
+      if (!hasAnsweredWord.value) {
+        const choicesText = currentWordChoices.value.map((c, i) => `選択肢${i + 1}、${c}。`).join(' ');
+        speechContent = `問題。${w.category}、${w.topic}。${w.question}。${choicesText}`;
+      } else {
+        const glossaryText = w.termGlossary ? `現場用語解説。${w.term || w.topic}。${w.termGlossary}。` : '';
+        const hintText = w.hint ? `ポイント。${w.hint}。` : '';
+        speechContent = `正解は、${w.answer}です。${glossaryText}${hintText}`;
+      }
+      speakText(speechContent);
+    };
+
+    // 項目を指定して読み上げる（振り返り一覧用）
+    const speakItem = (w) => {
+      if (isSpeaking.value && !isReviewAutoPlay.value) {
+        stopSpeech();
+        return;
+      }
+      const glossaryText = w.termGlossary ? `現場用語解説。${w.term || w.topic}。${w.termGlossary}。` : '';
+      const hintText = w.hint ? `ポイント。${w.hint}。` : '';
+      const speechContent = `${w.category}。${w.term || w.topic}。問題。${w.question}。正解は、${w.answer}です。${glossaryText}${hintText}`;
+      speakText(speechContent);
+    };
+
+    // 🚗 車両通勤・ハンズフリー自動連続耳学モード
+    const toggleAutoPlay = () => {
+      if (isAutoPlay.value) {
+        stopSpeech();
+      } else {
+        stopSpeech();
+        isAutoPlay.value = true;
+        acquireWakeLock().catch(() => {});
+        playWordAutoCycle();
+      }
+    };
+
+    const playWordAutoCycle = () => {
+      if (!isAutoPlay.value || isWordSessionFinished.value) {
+        isAutoPlay.value = false;
+        return;
+      }
+
+      const w = currentWord.value;
+      if (!w || !w.question) return;
+
+      // 1. 問題を読み上げる
+      const qText = `第${currentWordIndex.value + 1}問。${w.category}。${w.topic}。問題。${w.question}。`;
+      speakText(qText, () => {
+        if (!isAutoPlay.value) return;
+
+        // 2. シンキングタイム（2.2秒の間）
+        autoPlayTimer = setTimeout(() => {
+          if (!isAutoPlay.value) return;
+
+          // 画面上も回答状態にして正解を表示
+          hasAnsweredWord.value = true;
+          selectedWordChoice.value = w.answer;
+
+          // 3. 正解と用語解説・急所を読み上げる
+          const glossaryText = w.termGlossary ? `現場用語解説。${w.term || w.topic}。${w.termGlossary}。` : '';
+          const hintText = w.hint ? `ポイント。${w.hint}。` : '';
+          const aText = `正解は、${w.answer}です。${glossaryText}${hintText}`;
+
+          speakText(aText, () => {
+            if (!isAutoPlay.value) return;
+
+            // 4. 少し間を置いて次の問題へ
+            autoPlayTimer = setTimeout(() => {
+              if (!isAutoPlay.value) return;
+              if (currentWordIndex.value < wordSessionWords.value.length - 1) {
+                nextWord();
+                playWordAutoCycle();
+              } else {
+                // セッション完了 ➔ 自動で振り返り耳学へバトンタッチ！
+                isWordSessionFinished.value = true;
+                isAutoPlay.value = false;
+                const sectorLabel = wordFilterCategory.value === 'すべて' ? '全工種' : wordFilterCategory.value;
+                const finishMsg = `${sectorLabel}セクタの暗記演習が完了しました。続けて、セクタの振り返り耳学解説を開始します。`;
+                
+                speakText(finishMsg, () => {
+                  setTimeout(() => {
+                    toggleReviewAutoPlay();
+                  }, 1200);
+                });
+              }
+            }, 1800);
+          });
+        }, 2200);
+      });
+    };
+
+    // 🚗 振り返り画面での「連続耳学モード（音声解説リスニング）」
+    const toggleReviewAutoPlay = () => {
+      if (isReviewAutoPlay.value) {
+        stopSpeech();
+      } else {
+        stopSpeech();
+        isReviewAutoPlay.value = true;
+        acquireWakeLock().catch(() => {});
+        currentReviewSpeechIndex.value = 0;
+        playReviewAutoCycle();
+      }
+    };
+
+    const playReviewAutoCycle = () => {
+      const list = reviewedWordList.value;
+      if (!isReviewAutoPlay.value || list.length === 0 || currentReviewSpeechIndex.value >= list.length) {
+        isReviewAutoPlay.value = false;
+        speakText('セクタの振り返り耳学がすべて完了しました。大変お疲れ様でした。');
+        return;
+      }
+
+      const item = list[currentReviewSpeechIndex.value];
+      const w = item.word;
+      const num = currentReviewSpeechIndex.value + 1;
+      const statusText = item.record.isCorrect ? '正解した項目です。' : '見直しが必要な項目です。';
+      const glossaryText = w.termGlossary ? `現場用語解説。${w.term || w.topic}。${w.termGlossary}。` : '';
+      const hintText = w.hint ? `暗記のツボ。${w.hint}。` : '';
+
+      const reviewSpeech = `振り返り第${num}項目。${w.category}。${w.term || w.topic}。${statusText}基準値は、${w.answer}。${glossaryText}${hintText}`;
+
+      speakText(reviewSpeech, () => {
+        if (!isReviewAutoPlay.value) return;
+
+        reviewAutoTimer = setTimeout(() => {
+          if (!isReviewAutoPlay.value) return;
+          currentReviewSpeechIndex.value++;
+          if (currentReviewSpeechIndex.value < list.length) {
+            playReviewAutoCycle();
+          } else {
+            isReviewAutoPlay.value = false;
+            speakText('セクタの振り返り耳学がすべて終了しました。');
+          }
+        }, 1500);
+      });
+    };
+
+    // ==========================================
+    // 🎯 実戦テスト（10分 / 20分 / 本番72問）
+    // ==========================================
+    const selectedExamMode = ref('intensive20'); // 'speed10' | 'intensive20' | 'full72'
+    const isExamStarted = ref(false);
+    const isExamFinished = ref(false);
+    const examQuestions = ref([]);
+    const currentExamIndex = ref(0);
+    const examUserAnswers = ref({});
+    const examMarks = ref({});
+    const examTimeRemaining = ref(1200);
+    let examTimerInterval = null;
+
+    const currentExamQuestion = computed(() => {
+      if (examQuestions.value.length === 0) return {};
+      return examQuestions.value[currentExamIndex.value] || {};
+    });
+
+    const answeredExamCount = computed(() => {
+      return Object.keys(examUserAnswers.value).filter(k => examUserAnswers.value[k] !== null).length;
+    });
+
+    const getExamModeTitle = () => {
+      if (selectedExamMode.value === 'speed10') return '⚡ タイムリー10分版（15問）';
+      if (selectedExamMode.value === 'intensive20') return '🧠 濃縮20分版 [即時解説＆現場知見付き]（25問）';
+      return '🏆 本番72問フル模試（120分 / 72問選択解答シミュレーション）';
+    };
+
+    const startSpecificExam = (mode) => {
+      selectedExamMode.value = mode;
+
+      let targetCount = 72;
+      let durationSeconds = 7200; // 120分
+
+      if (mode === 'speed10') {
+        targetCount = 15;
+        durationSeconds = 600; // 10分
+      } else if (mode === 'intensive20') {
+        targetCount = 25;
+        durationSeconds = 1200; // 20分
+      }
+
+      // 【重複防止】1試験内での同一問題・類似問題の重複出題を100%完全排除
+      const shuffled = [...allQuestions.value].sort(() => 0.5 - Math.random());
+      const selected = [];
+      const seenSignatures = new Set();
+
+      for (const q of shuffled) {
+        // 重複判定シグネチャ：解説文または問題文＋正解選択肢（実質同一問題判定）
+        const corrText = (q.options && q.options[q.correctIndex]) ? q.options[q.correctIndex] : '';
+        const sig = (q.explanation || (q.question + '::' + corrText)).trim();
+
+        if (!seenSignatures.has(sig) && !seenSignatures.has(q.id)) {
+          seenSignatures.add(sig);
+          seenSignatures.add(q.id);
+          selected.push(q);
+          if (selected.length >= targetCount) {
+            break;
+          }
+        }
+      }
+      examQuestions.value = selected;
+
+      examUserAnswers.value = {};
+      examMarks.value = {};
+      for (let i = 0; i < examQuestions.value.length; i++) {
+        examUserAnswers.value[i] = null;
+        examMarks.value[i] = false;
+      }
+
+      currentExamIndex.value = 0;
+      examTimeRemaining.value = durationSeconds;
+      isExamStarted.value = true;
+      isExamFinished.value = false;
+
+      clearInterval(examTimerInterval);
+      examTimerInterval = setInterval(() => {
+        if (examTimeRemaining.value > 0) {
+          examTimeRemaining.value--;
+        } else {
+          finishExam();
+        }
+      }, 1000);
+    };
+
+    const selectExamAnswer = (idx) => {
+      examUserAnswers.value[currentExamIndex.value] = idx;
+    };
+
+    const toggleExamMark = (idx) => {
+      examMarks.value[idx] = !examMarks.value[idx];
+    };
+
+    const nextExamQuestion = () => {
+      if (currentExamIndex.value < examQuestions.value.length - 1) {
+        currentExamIndex.value++;
+      }
+    };
+
+    const prevExamQuestion = () => {
+      if (currentExamIndex.value > 0) {
+        currentExamIndex.value--;
+      }
+    };
+
+    const finishExam = () => {
+      clearInterval(examTimerInterval);
+      if (isExamAutoPlay.value) {
+        stopSpeech();
+      }
+      isExamFinished.value = true;
+      isExamStarted.value = false;
+    };
+
+    const resetExamState = () => {
+      clearInterval(examTimerInterval);
+      if (isExamAutoPlay.value || isExamReviewAutoPlay.value) {
+        stopSpeech();
+      }
+      isExamStarted.value = false;
+      isExamFinished.value = false;
+      examQuestions.value = [];
+    };
+
+    // 🎧 実戦テスト進行中：ハンズフリー連続聞き流し耳学モード
+    const toggleExamAutoPlay = () => {
+      if (isExamAutoPlay.value) {
+        stopSpeech();
+      } else {
+        stopSpeech();
+        isExamAutoPlay.value = true;
+        acquireWakeLock().catch(() => {});
+        playExamAutoCycle();
+      }
+    };
+
+    const playExamAutoCycle = () => {
+      if (!isExamAutoPlay.value || !isExamStarted.value || isExamFinished.value) {
+        isExamAutoPlay.value = false;
+        return;
+      }
+
+      const q = currentExamQuestion.value;
+      if (!q || !q.question) return;
+
+      const qNum = currentExamIndex.value + 1;
+      const cat = q.chapterName || q.category || '';
+      const opts = q.options || [];
+
+      // 1. 問題文と選択肢の読み上げ
+      let speech = `第${qNum}問。${cat}。問題。${q.question}。`;
+      opts.forEach((opt, i) => {
+        speech += `選択肢${i + 1}番、${opt}。`;
+      });
+
+      speakText(speech, () => {
+        if (!isExamAutoPlay.value) return;
+
+        // 2. シンキングタイム（2.5秒）
+        examAutoTimer = setTimeout(() => {
+          if (!isExamAutoPlay.value) return;
+
+          // 画面上の回答を正解選択肢にセットして視覚的に反映
+          examUserAnswers.value[currentExamIndex.value] = q.correctIndex;
+
+          // 3. 正解・解説・引っ掛け罠・現場知見の読み上げ（不適当な理由のフィードバック明示）
+          const chosenOpt = opts[q.correctIndex] || '';
+          const expText = q.explanation ? `不適当である理由の解説、${q.explanation}。` : '';
+          const trapText = q.trapNote ? `出題者の引っ掛け罠、${q.trapNote}。` : '';
+          const fieldText = q.fieldReality ? `現場工事長の知見、${q.fieldReality}。` : '';
+          const answerSpeech = `最も不適当な正解肢は、${q.correctIndex + 1}番です。「${chosenOpt}」という記述が不適当です。${expText}${trapText}${fieldText}`;
+
+          speakText(answerSpeech, () => {
+            if (!isExamAutoPlay.value) return;
+
+            // 4. 少し間を置いて次の問題へ
+            examAutoTimer = setTimeout(() => {
+              if (!isExamAutoPlay.value) return;
+
+              if (currentExamIndex.value < examQuestions.value.length - 1) {
+                nextExamQuestion();
+                playExamAutoCycle();
+              } else {
+                // テスト全問終了
+                isExamAutoPlay.value = false;
+                speakText('実戦テストの全問聞き流しが完了しました。採点結果画面へ移行します。', () => {
+                  finishExam();
+                });
+              }
+            }, 1800);
+          });
+        }, 2500);
+      });
+    };
+
+    const formatExamTime = (sec) => {
+      const m = Math.floor(sec / 60);
+      const s = sec % 60;
+      return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    };
+
+    const getExamOptionClass = (idx) => {
+      const currentAns = examUserAnswers.value[currentExamIndex.value];
+      const isSelected = currentAns === idx;
+      const isCorrect = idx === currentExamQuestion.value.correctIndex;
+
+      if (selectedExamMode.value === 'intensive20' && currentAns !== null) {
+        if (isCorrect) return 'bg-emerald-950/80 border-emerald-500 text-emerald-100 ring-1 ring-emerald-500';
+        if (isSelected && !isCorrect) return 'bg-rose-950/80 border-rose-500 text-rose-100 ring-1 ring-rose-500';
+        return 'bg-slate-900/60 border-slate-800 text-slate-500 opacity-60';
+      }
+
+      if (isSelected) {
+        return 'bg-sky-950/80 border-sky-500 text-sky-200 ring-1 ring-sky-500';
+      }
+      return 'bg-slate-950/80 border-slate-800 hover:border-slate-700 text-slate-300';
+    };
+
+    const getExamBadgeClass = (idx) => {
+      const currentAns = examUserAnswers.value[currentExamIndex.value];
+      const isSelected = currentAns === idx;
+      const isCorrect = idx === currentExamQuestion.value.correctIndex;
+
+      if (selectedExamMode.value === 'intensive20' && currentAns !== null) {
+        if (isCorrect) return 'bg-emerald-500 text-slate-950 border-emerald-400';
+        if (isSelected && !isCorrect) return 'bg-rose-500 text-white border-rose-400';
+      }
+      if (isSelected) return 'bg-sky-500 text-slate-950 border-sky-400';
+      return 'bg-slate-800 text-slate-400 border-slate-700';
+    };
+
+    const getExamGridClass = (idx) => {
+      const isCurrent = currentExamIndex.value === idx;
+      const ans = examUserAnswers.value[idx];
+      let base = 'bg-slate-950 text-slate-400 border-slate-800';
+
+      if (ans !== null) {
+        base = 'bg-emerald-950/60 text-emerald-300 border-emerald-800';
+      }
+      if (isCurrent) {
+        base += ' ring-2 ring-sky-400 border-sky-400 text-white font-bold';
+      }
+      return base;
+    };
+
+    // 採点レポート
+    const examScore = computed(() => {
+      let score = 0;
+      examQuestions.value.forEach((q, idx) => {
+        if (examUserAnswers.value[idx] === q.correctIndex) {
+          score++;
+        }
+      });
+      return score;
+    });
+
+    const examScoreRate = computed(() => {
+      if (examQuestions.value.length === 0) return 0;
+      return (examScore.value / examQuestions.value.length) * 100;
+    });
+
+    const examCategoryStats = computed(() => {
+      const stats = {};
+      examQuestions.value.forEach((q, idx) => {
+        const cat = q.chapterName || q.category || 'その他';
+        if (!stats[cat]) {
+          stats[cat] = { total: 0, correct: 0, rate: 0 };
+        }
+        stats[cat].total++;
+        if (examUserAnswers.value[idx] === q.correctIndex) {
+          stats[cat].correct++;
+        }
+      });
+      for (const cat in stats) {
+        stats[cat].rate = (stats[cat].correct / stats[cat].total) * 100;
+      }
+      return stats;
+    });
+
+    // ==========================================
+    // 💥 誤答・要復習確認 ＆ 再試験システム
+    // ==========================================
+    const examReviewFilter = ref('wrong'); // 'wrong' | 'marked' | 'all'
+
+    // 誤答問題リスト
+    const examWrongQuestions = computed(() => {
+      const list = [];
+      examQuestions.value.forEach((q, idx) => {
+        if (examUserAnswers.value[idx] !== q.correctIndex) {
+          list.push({
+            q,
+            userAnswer: examUserAnswers.value[idx],
+            isCorrect: false,
+            isMarked: !!examMarks.value[idx],
+            idx
+          });
+        }
+      });
+      return list;
+    });
+
+    // 要復習マーク付き問題リスト
+    const examMarkedQuestions = computed(() => {
+      const list = [];
+      examQuestions.value.forEach((q, idx) => {
+        if (examMarks.value[idx]) {
+          list.push({
+            q,
+            userAnswer: examUserAnswers.value[idx],
+            isCorrect: examUserAnswers.value[idx] === q.correctIndex,
+            isMarked: true,
+            idx
+          });
+        }
+      });
+      return list;
+    });
+
+    // フィルター適用後の確認リスト
+    const filteredExamReviewList = computed(() => {
+      if (examReviewFilter.value === 'marked') {
+        return examMarkedQuestions.value;
+      }
+      if (examReviewFilter.value === 'all') {
+        return examQuestions.value.map((q, idx) => ({
+          q,
+          userAnswer: examUserAnswers.value[idx],
+          isCorrect: examUserAnswers.value[idx] === q.correctIndex,
+          isMarked: !!examMarks.value[idx],
+          idx
+        }));
+      }
+      return examWrongQuestions.value;
+    });
+
+    // 誤答または要復習の再試験開始
+    const startRetryExam = (type = 'wrong') => {
+      const pool = [];
+      const seenIds = new Set();
+
+      examQuestions.value.forEach((q, idx) => {
+        const isWrong = examUserAnswers.value[idx] !== q.correctIndex;
+        const isMarked = !!examMarks.value[idx];
+        const shouldInclude = (type === 'wrong') ? isWrong : (isWrong || isMarked);
+
+        if (shouldInclude && !seenIds.has(q.id)) {
+          seenIds.add(q.id);
+          pool.push(q);
+        }
+      });
+
+      if (pool.length === 0) {
+        alert('再試験の対象となる問題がありません。全問正解・復習完了です！🎉');
+        return;
+      }
+
+      // 再試験モードを起動
+      examQuestions.value = pool;
+      examUserAnswers.value = {};
+      examMarks.value = {};
+      for (let i = 0; i < pool.length; i++) {
+        examUserAnswers.value[i] = null;
+        examMarks.value[i] = false;
+      }
+
+      currentExamIndex.value = 0;
+      examTimeRemaining.value = pool.length * 90; // 1問あたり90秒
+      isExamStarted.value = true;
+      isExamFinished.value = false;
+
+      clearInterval(examTimerInterval);
+      examTimerInterval = setInterval(() => {
+        if (examTimeRemaining.value > 0) {
+          examTimeRemaining.value--;
+        } else {
+          finishExam();
+        }
+      }, 1000);
+    };
+
+    // 同一設定での最初からのフル再試験
+    const restartCurrentExam = () => {
+      startSpecificExam(selectedExamMode.value);
+    };
+
+    // 個別問題のブックマーク切り替え（結果画面用）
+    const toggleQuestionBookmark = async (q) => {
+      q.isBookmarked = !q.isBookmarked;
+      const target = allQuestions.value.find(item => item.id === q.id);
+      if (target) {
+        target.isBookmarked = q.isBookmarked;
+      }
+      try {
+        await saveAllToDB(allQuestions.value);
+      } catch (e) {}
+    };
+
+    // 🎧 採点結果画面：誤答・要復習の連続聞き流し耳学モード
+    const toggleExamReviewAutoPlay = () => {
+      if (isExamReviewAutoPlay.value) {
+        stopSpeech();
+      } else {
+        stopSpeech();
+        if (filteredExamReviewList.value.length === 0) {
+          speakText('確認対象の問題がありません。');
+          return;
+        }
+        isExamReviewAutoPlay.value = true;
+        currentExamReviewSpeechIndex.value = 0;
+        acquireWakeLock().catch(() => {});
+        playExamReviewAutoCycle();
+      }
+    };
+
+    const playExamReviewAutoCycle = () => {
+      const list = filteredExamReviewList.value;
+      if (!isExamReviewAutoPlay.value || list.length === 0 || currentExamReviewSpeechIndex.value >= list.length) {
+        isExamReviewAutoPlay.value = false;
+        speakText('復習対象の問題の聞き流しがすべて完了しました。大変お疲れ様でした。');
+        return;
+      }
+
+      const item = list[currentExamReviewSpeechIndex.value];
+      const q = item.q;
+      const num = currentExamReviewSpeechIndex.value + 1;
+      const statusText = item.isCorrect ? '正解した問題です。' : '見直しが必要な問題です。';
+      const correctOptText = (q.options && q.options[q.correctIndex]) ? q.options[q.correctIndex] : '';
+      const expText = q.explanation ? `不適当である理由の解説、${q.explanation}。` : '';
+      const trapText = q.trapNote ? `出題者の引っ掛け罠、${q.trapNote}。` : '';
+      const fieldText = q.fieldReality ? `現場工事長の知見、${q.fieldReality}。` : '';
+
+      const reviewSpeech = `復習第${num}問。${cat}。${statusText}問題。${q.question}。最も不適当な正解肢は、肢${q.correctIndex + 1}番です。「${correctOptText}」という記述が不適当です。${expText}${trapText}${fieldText}`;
+
+      speakText(reviewSpeech, () => {
+        if (!isExamReviewAutoPlay.value) return;
+
+        examReviewAutoTimer = setTimeout(() => {
+          if (!isExamReviewAutoPlay.value) return;
+          currentExamReviewSpeechIndex.value++;
+          if (currentExamReviewSpeechIndex.value < list.length) {
+            playExamReviewAutoCycle();
+          } else {
+            isExamReviewAutoPlay.value = false;
+            speakText('復習対象の問題の聞き流しがすべて完了しました。');
+          }
+        }, 1600);
+      });
+    };
+
+    // ==========================================
+    // ⏱️ 工種別・章別ドリル演習（40秒タイマー）
+    // ==========================================
+    const quizFilterChapter = ref('ALL');
+    const quizOnlyBookmarked = ref(false);
+    const quizRandomOrder = ref(false);
+    const currentQuizIndex = ref(0);
+    const timerRemaining = ref(40.0);
+    const isTimerRunning = ref(false);
+    const hasAnswered = ref(false);
+    const selectedOption = ref(null);
+    let quizTimerInterval = null;
+
+    const activeQuizQuestions = computed(() => {
+      let list = allQuestions.value;
+      if (quizFilterChapter.value !== 'ALL') {
+        list = list.filter(q => q.chapterId === quizFilterChapter.value);
+      }
+      if (quizOnlyBookmarked.value) {
+        list = list.filter(q => q.isBookmarked);
+      }
+
+      // 重複排除（同一問題の多重出題を防止）
+      const seen = new Set();
+      const uniqueList = [];
+      for (const q of list) {
+        const corrText = (q.options && q.options[q.correctIndex]) ? q.options[q.correctIndex] : '';
+        const sig = (q.explanation || (q.question + '::' + corrText)).trim();
+        if (!seen.has(sig) && !seen.has(q.id)) {
+          seen.add(sig);
+          seen.add(q.id);
+          uniqueList.push(q);
+        }
+      }
+
+      if (quizRandomOrder.value) {
+        return [...uniqueList].sort(() => 0.5 - Math.random());
+      }
+      return uniqueList;
+    });
+
+    const currentQuestion = computed(() => {
+      if (activeQuizQuestions.value.length === 0) return {};
+      return activeQuizQuestions.value[currentQuizIndex.value] || {};
+    });
+
+    const startQuizTimer = () => {
+      clearInterval(quizTimerInterval);
+      timerRemaining.value = 40.0;
+      isTimerRunning.value = true;
+      quizTimerInterval = setInterval(() => {
+        if (timerRemaining.value > 0.1) {
+          timerRemaining.value -= 0.1;
+        } else {
+          timerRemaining.value = 0;
+          isTimerRunning.value = false;
+          clearInterval(quizTimerInterval);
+          if (!hasAnswered.value) {
+            handleSelectOption(null); // 時間切れ
+          }
+        }
+      }, 100);
+    };
+
+    const toggleTimer = () => {
+      if (isTimerRunning.value) {
+        clearInterval(quizTimerInterval);
+        isTimerRunning.value = false;
+      } else if (!hasAnswered.value) {
+        quizTimerInterval = setInterval(() => {
+          if (timerRemaining.value > 0.1) {
+            timerRemaining.value -= 0.1;
+          } else {
+            timerRemaining.value = 0;
+            isTimerRunning.value = false;
+            clearInterval(quizTimerInterval);
+            if (!hasAnswered.value) handleSelectOption(null);
+          }
+        }, 100);
+        isTimerRunning.value = true;
+      }
+    };
+
+    const handleSelectOption = (idx) => {
+      if (hasAnswered.value) return;
+      hasAnswered.value = true;
+      selectedOption.value = idx;
+      clearInterval(quizTimerInterval);
+      isTimerRunning.value = false;
+    };
+
+    const nextQuestion = () => {
+      hasAnswered.value = false;
+      selectedOption.value = null;
+      if (currentQuizIndex.value < activeQuizQuestions.value.length - 1) {
+        currentQuizIndex.value++;
+      } else {
+        currentQuizIndex.value = 0;
+      }
+      startQuizTimer();
+    };
+
+    const resetQuiz = () => {
+      currentQuizIndex.value = 0;
+      hasAnswered.value = false;
+      selectedOption.value = null;
+      startQuizTimer();
+    };
+
+    const getOptionStyle = (idx) => {
+      if (!hasAnswered.value) {
+        return 'bg-slate-950/80 border-slate-800 hover:border-slate-700 text-slate-200';
+      }
+      if (idx === currentQuestion.value.correctIndex) {
+        return 'bg-emerald-950/80 border-emerald-500 text-emerald-100 ring-1 ring-emerald-500';
+      }
+      if (selectedOption.value === idx) {
+        return 'bg-rose-950/80 border-rose-500 text-rose-100 ring-1 ring-rose-500';
+      }
+      return 'bg-slate-950/40 border-slate-800 text-slate-500 opacity-50';
+    };
+
+    const getOptionBadgeStyle = (idx) => {
+      if (!hasAnswered.value) {
+        return 'bg-slate-800 text-slate-400 border-slate-700';
+      }
+      if (idx === currentQuestion.value.correctIndex) {
+        return 'bg-emerald-500 text-slate-950 border-emerald-400';
+      }
+      if (selectedOption.value === idx) {
+        return 'bg-rose-500 text-white border-rose-400';
+      }
+      return 'bg-slate-800 text-slate-600 border-slate-800';
+    };
+
+    const toggleBookmark = (q) => {
+      q.isBookmarked = !q.isBookmarked;
+      saveAllToDB(allQuestions.value);
+    };
+
+    // 🎧 工種別ドリル演習：ハンズフリー連続聞き流し耳学モード
+    const toggleQuizAutoPlay = () => {
+      if (isQuizAutoPlay.value) {
+        stopSpeech();
+      } else {
+        stopSpeech();
+        if (activeQuizQuestions.value.length === 0) {
+          speakText('演習対象の問題がありません。');
+          return;
+        }
+        isQuizAutoPlay.value = true;
+        acquireWakeLock().catch(() => {});
+        playQuizAutoCycle();
+      }
+    };
+
+    const playQuizAutoCycle = () => {
+      if (!isQuizAutoPlay.value || activeQuizQuestions.value.length === 0) {
+        isQuizAutoPlay.value = false;
+        return;
+      }
+
+      const q = currentQuestion.value;
+      if (!q || !q.question) return;
+
+      const qNum = currentQuizIndex.value + 1;
+      const cat = q.chapterName || q.category || '';
+      const opts = q.options || [];
+
+      // タイマーを一旦停止
+      clearInterval(quizTimerInterval);
+      isTimerRunning.value = false;
+
+      // 1. 問題文と選択肢の読み上げ
+      let speech = `ドリル第${qNum}問。${cat}。問題。${q.question}。`;
+      opts.forEach((opt, i) => {
+        speech += `選択肢${i + 1}番、${opt}。`;
+      });
+
+      speakText(speech, () => {
+        if (!isQuizAutoPlay.value) return;
+
+        // 2. シンキングタイム（2.2秒）
+        quizAutoTimer = setTimeout(() => {
+          if (!isQuizAutoPlay.value) return;
+
+          // 画面上も回答状態にして正解を表示
+          handleSelectOption(q.correctIndex);
+
+          // 3. 正解と解説・罠・現場知見の読み上げ（不適当な理由のフィードバック明示）
+          const chosenOpt = opts[q.correctIndex] || '';
+          const expText = q.explanation ? `不適当である理由の解説、${q.explanation}。` : '';
+          const trapText = q.trapNote ? `出題者の引っ掛け罠、${q.trapNote}。` : '';
+          const fieldText = q.fieldReality ? `現場工事長の知見、${q.fieldReality}。` : '';
+          const answerSpeech = `最も不適当な正解肢は、${q.correctIndex + 1}番です。「${chosenOpt}」という記述が不適当です。${expText}${trapText}${fieldText}`;
+
+          speakText(answerSpeech, () => {
+            if (!isQuizAutoPlay.value) return;
+
+            // 4. 少し間を置いて次の問題へ
+            quizAutoTimer = setTimeout(() => {
+              if (!isQuizAutoPlay.value) return;
+
+              if (currentQuizIndex.value < activeQuizQuestions.value.length - 1) {
+                nextQuestion();
+                playQuizAutoCycle();
+              } else {
+                isQuizAutoPlay.value = false;
+                speakText('選択した工種ドリルの聞き流しがすべて終了しました。大変お疲れ様でした。');
+              }
+            }, 1800);
+          });
+        }, 2200);
+      });
+    };
+
+    // ==========================================
+    // 🚨 現場直結 罠チートシート ＆ 用語集
+    // ==========================================
+    const cheatSearchQuery = ref('');
+    const selectedCheatChapter = ref('ALL');
+    const cheatPage = ref(1);
+    const itemsPerPage = 12;
+
+    const filteredCheatSheetQuestions = computed(() => {
+      return allQuestions.value.filter(q => {
+        const matchChapter = selectedCheatChapter.value === 'ALL' || q.chapterId === selectedCheatChapter.value;
+        const query = cheatSearchQuery.value.trim().toLowerCase();
+        const matchQuery = !query || 
+          (q.question && q.question.toLowerCase().includes(query)) ||
+          (q.trapNote && q.trapNote.toLowerCase().includes(query)) ||
+          (q.explanation && q.explanation.toLowerCase().includes(query)) ||
+          (q.fieldReality && q.fieldReality.toLowerCase().includes(query));
+        return matchChapter && matchQuery;
+      });
+    });
+
+    const totalPages = computed(() => {
+      return Math.ceil(filteredCheatSheetQuestions.value.length / itemsPerPage);
+    });
+
+    const paginatedCheatQuestions = computed(() => {
+      const start = (cheatPage.value - 1) * itemsPerPage;
+      return filteredCheatSheetQuestions.value.slice(start, start + itemsPerPage);
+    });
+
+    watch([cheatSearchQuery, selectedCheatChapter], () => {
+      cheatPage.value = 1;
+      if (isCheatAutoPlay.value) {
+        stopSpeech();
       }
     });
-  }
 
-  elements.btnFilterMistakes.addEventListener('click', () => renderReviewList('mistakes'));
-  elements.btnShowAllReviews.addEventListener('click', () => renderReviewList('all'));
-  elements.btnSpeakAllExplanations.addEventListener('click', speakAllMistakesExplanations);
+    // 🎧 罠チートシート：現場知見＆要点連続聞き流し耳学モード
+    const toggleCheatAutoPlay = () => {
+      if (isCheatAutoPlay.value) {
+        stopSpeech();
+      } else {
+        stopSpeech();
+        const list = filteredCheatSheetQuestions.value;
+        if (list.length === 0) {
+          speakText('対象のチートシート項目がありません。');
+          return;
+        }
+        isCheatAutoPlay.value = true;
+        currentCheatSpeechIndex.value = 0;
+        acquireWakeLock().catch(() => {});
+        playCheatAutoCycle();
+      }
+    };
 
-  // ドリル
-  elements.btnDrillBack.addEventListener('click', () => {
-    stopSpeaking();
-    elements.drillActiveView.classList.add('hidden');
-    elements.drillCategoryGrid.parentElement.classList.remove('hidden');
-  });
+    const playCheatAutoCycle = () => {
+      const list = filteredCheatSheetQuestions.value;
+      if (!isCheatAutoPlay.value || list.length === 0 || currentCheatSpeechIndex.value >= list.length) {
+        isCheatAutoPlay.value = false;
+        speakText('チートシートの全項目聞き流しが完了しました。大変お疲れ様でした。');
+        return;
+      }
 
-  elements.btnSpeakDrillQ.addEventListener('click', speakCurrentDrillQuestion);
-  elements.btnSpeakDrillExp.addEventListener('click', speakCurrentDrillExplanation);
+      // 該当アイテムがあるページに自動めくり
+      const targetPage = Math.floor(currentCheatSpeechIndex.value / itemsPerPage) + 1;
+      if (cheatPage.value !== targetPage) {
+        cheatPage.value = targetPage;
+      }
 
-  elements.btnDrillNext.addEventListener('click', () => {
-    stopSpeaking();
-    if (state.drill.currentIndex < state.drill.questions.length - 1) {
-      state.drill.currentIndex++;
-      renderCurrentDrillQuestion();
-    } else {
-      elements.btnDrillBack.click();
-    }
-  });
+      const q = list[currentCheatSpeechIndex.value];
+      const num = currentCheatSpeechIndex.value + 1;
+      const correctOptText = (q.options && q.options[q.correctIndex]) ? q.options[q.correctIndex] : '';
+      const expText = q.explanation ? `不適当である理由の解説、${q.explanation}。` : '';
+      const trapText = q.trapNote ? `出題者の引っ掛け罠、${q.trapNote}。` : '';
+      const fieldText = q.fieldReality ? `現場工事長の知見、${q.fieldReality}。` : '';
 
-  // 用語集検索・フィルタ
-  elements.termsSearchInput.addEventListener('input', renderTermsList);
-  elements.termsCategoryFilter.addEventListener('change', renderTermsList);
+      const cheatSpeech = `チートシート第${num}項目。${cat}。問題。${q.question}。最も不適当な肢は、肢${q.correctIndex + 1}番です。「${correctOptText}」という記述が不適当です。${trapText}${fieldText}${expText}`;
 
-  // 管理画面
-  elements.addQuestionForm.addEventListener('submit', handleAddQuestionSubmit);
-  elements.adminSearchInput.addEventListener('input', renderAdminTable);
+      speakText(cheatSpeech, () => {
+        if (!isCheatAutoPlay.value) return;
 
-  // JSONエクスポート
-  const btnExport = document.getElementById('btn-export-json');
-  if (btnExport) {
-    btnExport.addEventListener('click', () => {
-      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state.questions, null, 2));
+        cheatAutoTimer = setTimeout(() => {
+          if (!isCheatAutoPlay.value) return;
+          currentCheatSpeechIndex.value++;
+          if (currentCheatSpeechIndex.value < list.length) {
+            playCheatAutoCycle();
+          } else {
+            isCheatAutoPlay.value = false;
+            speakText('チートシートの全項目聞き流しが完了しました。');
+          }
+        }, 1600);
+      });
+    };
+
+    // ==========================================
+    // 初期化ロード
+    // ==========================================
+    const switchTab = (tab) => {
+      stopSpeech();
+      activeTab.value = tab;
+      if (tab === 'quiz') {
+        startQuizTimer();
+      } else {
+        clearInterval(quizTimerInterval);
+        isTimerRunning.value = false;
+      }
+    };
+
+    const exportJSON = () => {
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(allQuestions.value, null, 2));
       const downloadAnchor = document.createElement('a');
-      const nowStr = new Date().toISOString().slice(0, 10);
       downloadAnchor.setAttribute("href", dataStr);
-      downloadAnchor.setAttribute("download", `g_kentei_questions_${nowStr}.json`);
+      downloadAnchor.setAttribute("download", "arch_construction_600_questions.json");
       document.body.appendChild(downloadAnchor);
       downloadAnchor.click();
       downloadAnchor.remove();
-      showToast("📥 全問題データをダウンロード保存しました！");
+    };
+
+    const resetToFactoryPool = async () => {
+      if (confirm('初期の600問プールにリセットしますか？')) {
+        allQuestions.value = window.QUESTIONS_BANK || [];
+        await saveAllToDB(allQuestions.value);
+        alert('600問の初期問題プールにリセットしました！');
+      }
+    };
+
+    // ==========================================
+    // ➕ 手打ち問題追加（参考書からの登録）
+    // ==========================================
+    const newQuestion = ref({
+      chapterId: 'ch1',
+      category: '建築学（環境・材料）',
+      question: '',
+      option1: '',
+      option2: '',
+      option3: '',
+      option4: '',
+      correctIndex: 0,
+      explanation: '',
+      trapNote: '',
+      fieldReality: '',
+      difficulty: '本番レベル'
     });
-  }
 
-  // JSONインポート
-  const btnImportTrigger = document.getElementById('btn-import-trigger');
-  const fileImportInput = document.getElementById('admin-file-import');
-  if (btnImportTrigger && fileImportInput) {
-    btnImportTrigger.addEventListener('click', () => fileImportInput.click());
-    fileImportInput.addEventListener('change', (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
+    const addCustomQuestionSuccess = ref(false);
 
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        try {
-          const imported = JSON.parse(event.target.result);
-          if (!Array.isArray(imported)) throw new Error("配列形式のJSONではありません");
+    const chapterCategoryDefaults = {
+      ch1: { name: '第1章 建築学（環境・構造・材料）', category: '建築学（環境・材料）' },
+      ch2: { name: '第2章 共通（設備・契約・測量）', category: '設備・契約・測量' },
+      ch3: { name: '第3章 躯体施工（地盤・RC・鉄骨・型枠）', category: '躯体施工（RC・鉄骨）' },
+      ch4: { name: '第4章 仕上施工（防水・タイル・内装・建具）', category: '仕上施工（防水・内装）' },
+      ch5: { name: '第5章 施工管理法（工程・品質・安全）', category: '施工管理法（工程・安全）' },
+      ch6: { name: '第6章 法規（建築基準法・建設業法・労基法）', category: '法規（基準法・建設業法）' }
+    };
 
-          const currentIds = new Set(state.questions.map(q => q.id));
-          const newItems = imported.filter(q => q && q.question && !currentIds.has(q.id));
+    const onNewQuestionChapterChange = () => {
+      const ch = chapterCategoryDefaults[newQuestion.value.chapterId];
+      if (ch) {
+        newQuestion.value.category = ch.category;
+      }
+    };
 
-          if (newItems.length === 0) {
-            alert("新しい問題は見つかりませんでした（すべて登録済みか、形式が不適切です）。");
-            return;
-          }
+    const addCustomQuestion = async () => {
+      if (!newQuestion.value.question.trim()) {
+        alert('問題文を入力してください。');
+        return;
+      }
+      if (!newQuestion.value.option1.trim() || !newQuestion.value.option2.trim() || 
+          !newQuestion.value.option3.trim() || !newQuestion.value.option4.trim()) {
+        alert('選択肢1〜4をすべて入力してください。');
+        return;
+      }
 
-          const stored = getStoredManualQuestions();
-          const combined = [...newItems, ...stored];
-          saveStoredManualQuestions(combined);
-
-          state.questions = [...newItems, ...state.questions];
-          updateHeaderStats();
-          renderAdminTable();
-          renderDrillCategories();
-          showToast(`📤 ${newItems.length} 件の新しい問題を取り込みました！`);
-        } catch (err) {
-          alert(`インポートに失敗しました: ${err.message}`);
-        }
+      const chInfo = chapterCategoryDefaults[newQuestion.value.chapterId] || { name: 'オリジナル章', category: '自作問題' };
+      const qObj = {
+        id: 'custom-q-' + Date.now(),
+        chapterId: newQuestion.value.chapterId,
+        chapterName: chInfo.name,
+        category: newQuestion.value.category.trim() || chInfo.category,
+        question: newQuestion.value.question.trim(),
+        options: [
+          newQuestion.value.option1.trim(),
+          newQuestion.value.option2.trim(),
+          newQuestion.value.option3.trim(),
+          newQuestion.value.option4.trim()
+        ],
+        correctIndex: Number(newQuestion.value.correctIndex),
+        explanation: newQuestion.value.explanation.trim() || ('正解は肢' + (Number(newQuestion.value.correctIndex) + 1) + 'です。'),
+        trapNote: newQuestion.value.trapNote.trim() || '【🚨 ここが引っ掛け罠！】\n・参考書の要点を再確認しましょう。',
+        fieldReality: newQuestion.value.fieldReality.trim() || '現場施工においても頻出の重要管理項目です。',
+        difficulty: newQuestion.value.difficulty,
+        isCustom: true,
+        isBookmarked: false
       };
-      reader.readAsText(file);
-      fileImportInput.value = '';
-    });
-  }
-}
 
-// 実行開始
-document.addEventListener('DOMContentLoaded', initApp);
+      allQuestions.value.unshift(qObj);
+      await saveAllToDB(allQuestions.value);
+
+      // フォームリセット
+      newQuestion.value.question = '';
+      newQuestion.value.option1 = '';
+      newQuestion.value.option2 = '';
+      newQuestion.value.option3 = '';
+      newQuestion.value.option4 = '';
+      newQuestion.value.explanation = '';
+      newQuestion.value.trapNote = '';
+      newQuestion.value.fieldReality = '';
+
+      addCustomQuestionSuccess.value = true;
+      setTimeout(() => { addCustomQuestionSuccess.value = false; }, 3000);
+      alert('🎉 問題を追加しました！テストや演習に即座に反映されます。');
+    };
+
+    const customQuestionsList = computed(() => {
+      return allQuestions.value.filter(q => q.isCustom || (q.id && q.id.startsWith('custom-')));
+    });
+
+    const deleteCustomQuestion = async (id) => {
+      if (confirm('この自作問題を削除しますか？')) {
+        allQuestions.value = allQuestions.value.filter(q => q.id !== id);
+        await saveAllToDB(allQuestions.value);
+      }
+    };
+
+    // PWA & Android / iOS モバイル対応状態
+    const installPrompt = ref(null);
+    const isInstallable = ref(false);
+    const isOnline = ref(typeof navigator !== 'undefined' ? navigator.onLine : true);
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        installPrompt.value = e;
+        isInstallable.value = true;
+      });
+      window.addEventListener('appinstalled', () => {
+        isInstallable.value = false;
+        installPrompt.value = null;
+      });
+      window.addEventListener('online', () => { isOnline.value = true; });
+      window.addEventListener('offline', () => { isOnline.value = false; });
+    }
+
+    const triggerInstall = async () => {
+      if (!installPrompt.value) return;
+      installPrompt.value.prompt();
+      const { outcome } = await installPrompt.value.userChoice;
+      if (outcome === 'accepted') {
+        isInstallable.value = false;
+      }
+      installPrompt.value = null;
+    };
+
+    onMounted(async () => {
+      maskUrlAndHistory();
+      try {
+        const cached = await getAllFromDB();
+        // キャッシュが存在し、かつ最新の問題バンク件数と一致していればキャッシュを使用。
+        // 件数が異なる場合やキャッシュが空の場合は最新バンクでIndexedDBを更新・初期化。
+        if (cached && cached.length > 0 && window.QUESTIONS_BANK && cached.length === window.QUESTIONS_BANK.length) {
+          allQuestions.value = cached;
+        } else if (window.QUESTIONS_BANK && window.QUESTIONS_BANK.length > 0) {
+          allQuestions.value = window.QUESTIONS_BANK;
+          await saveAllToDB(window.QUESTIONS_BANK);
+        }
+      } catch (err) {
+        if (window.QUESTIONS_BANK) {
+          allQuestions.value = window.QUESTIONS_BANK;
+        }
+      }
+    });
+
+    onUnmounted(() => {
+      stopSpeech();
+      clearInterval(examTimerInterval);
+      clearInterval(quizTimerInterval);
+    });
+
+    return {
+      chapters,
+      activeTab,
+      switchTab,
+      allQuestions,
+      totalQuestionsCount,
+
+      // Word Flash & Sector
+      allWords,
+      currentWordIndex,
+      wordFilterCategory,
+      wordSessionCountOption,
+      isWordRandom,
+      selectedWordChoice,
+      hasAnsweredWord,
+      wordStreak,
+      wordMastered,
+      activeWords,
+      currentWord,
+      currentWordChoices,
+      showWordGlossary,
+      toggleWordGlossary,
+      handleSelectWord,
+      nextWord,
+      prevWord,
+      toggleWordMastered,
+      isWordSessionFinished,
+      wordSessionStats,
+      reviewedWordList,
+      wordReviewFilter,
+      startWordSession,
+      retryWrongWords,
+      wordSectors,
+      selectSector,
+      finishWordSessionEarly,
+
+      // Audio & Speech (TTS / 耳学通勤モード & 振り返り耳学 & 全モード聞き流し)
+      isSpeechSupported,
+      isSpeaking,
+      isAutoPlay,
+      isReviewAutoPlay,
+      currentReviewSpeechIndex,
+      isExamAutoPlay,
+      isExamReviewAutoPlay,
+      currentExamReviewSpeechIndex,
+      isQuizAutoPlay,
+      isCheatAutoPlay,
+      currentCheatSpeechIndex,
+      speechRate,
+      speakCurrentWord,
+      speakItem,
+      toggleAutoPlay,
+      toggleReviewAutoPlay,
+      toggleExamAutoPlay,
+      toggleExamReviewAutoPlay,
+      toggleQuizAutoPlay,
+      toggleCheatAutoPlay,
+      stopSpeech,
+
+      // Exam
+      selectedExamMode,
+      isExamStarted,
+      isExamFinished,
+      examQuestions,
+      currentExamIndex,
+      currentExamQuestion,
+      examUserAnswers,
+      examMarks,
+      examTimeRemaining,
+      answeredExamCount,
+      getExamModeTitle,
+      startSpecificExam,
+      selectExamAnswer,
+      toggleExamMark,
+      nextExamQuestion,
+      prevExamQuestion,
+      finishExam,
+      resetExamState,
+      formatExamTime,
+      getExamOptionClass,
+      getExamBadgeClass,
+      getExamGridClass,
+      examScore,
+      examScoreRate,
+      examCategoryStats,
+      examWrongQuestions,
+      examMarkedQuestions,
+      examReviewFilter,
+      filteredExamReviewList,
+      startRetryExam,
+      restartCurrentExam,
+      toggleQuestionBookmark,
+
+      // Quiz
+      quizFilterChapter,
+      quizOnlyBookmarked,
+      quizRandomOrder,
+      currentQuizIndex,
+      activeQuizQuestions,
+      currentQuestion,
+      timerRemaining,
+      isTimerRunning,
+      hasAnswered,
+      selectedOption,
+      toggleTimer,
+      handleSelectOption,
+      nextQuestion,
+      resetQuiz,
+      getOptionStyle,
+      getOptionBadgeStyle,
+      toggleBookmark,
+
+      // Cheatsheet
+      cheatSearchQuery,
+      selectedCheatChapter,
+      filteredCheatSheetQuestions,
+      paginatedCheatQuestions,
+      cheatPage,
+      totalPages,
+
+      // Manage & Custom Questions
+      exportJSON,
+      resetToFactoryPool,
+      newQuestion,
+      addCustomQuestion,
+      customQuestionsList,
+      deleteCustomQuestion,
+      onNewQuestionChapterChange,
+      addCustomQuestionSuccess,
+
+      // PWA & Mobile
+      isInstallable,
+      triggerInstall,
+      isOnline,
+
+      // Screen Wake Lock & Keepalive
+      isWakeLockSupported,
+      isWakeLockActive,
+      wakeLockManualOverride,
+      toggleManualWakeLock,
+      testSpeech,
+
+      // App Update & Reload
+      reloadApp,
+
+      // Security & Authorization & QR Modal
+      isAuthorized,
+      authPasscode,
+      authError,
+      authSuccessMsg,
+      verifyAuth,
+      lockApp,
+      showQrModal,
+      webAppUrl,
+      qrCodeImageUrl
+    };
+  }
+}).mount('#app');
