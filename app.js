@@ -132,6 +132,7 @@ const elements = {
   btnShowAllReviews: document.getElementById('btn-show-all-reviews'),
   btnSpeakAllExplanations: document.getElementById('btn-speak-all-explanations'),
   examReviewContainer: document.getElementById('exam-review-container'),
+  categoryBreakdownList: document.getElementById('category-breakdown-list'),
 
   // ドリル要素
   drillCategoryGrid: document.getElementById('drill-category-grid'),
@@ -462,7 +463,7 @@ async function initApp() {
         if (!newWorker) return;
         newWorker.addEventListener('statechange', () => {
           if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-            showToast("✨ 最新バージョン(v3.9)に自動更新されました！");
+            showToast("✨ 最新バージョン(v4.0)に自動更新されました！");
           }
         });
       });
@@ -568,13 +569,103 @@ function populateCategoryDropdowns() {
 }
 
 // ==========================================
-// 1. 模擬試験ロジック
+// 1. 模擬試験ロジック & シラバス層化抽出サンプリング
 // ==========================================
+// JDLAシラバスに基づく分野別出題比率による層化抽出（偏りを防ぎ全分野をバランス良く出題）
+function sampleStratifiedQuestions(allQuestions, targetCount) {
+  if (!allQuestions || allQuestions.length === 0) return [];
+  if (targetCount >= allQuestions.length) {
+    return shuffleArray([...allQuestions]);
+  }
+
+  // JDLA G検定シラバス目安出題比率
+  const SYLLABUS_RATIOS = {
+    '人工知能の定義と歴史': 0.10,
+    '機械学習の具体的手法': 0.20,
+    'ディープラーニングの概要と要素技術': 0.20,
+    '画像認識（CNNとその発展）': 0.15,
+    '自然言語処理・音声・生成AI': 0.15,
+    '強化学習': 0.10,
+    'AIの社会実装・法律・倫理': 0.10
+  };
+
+  // 分野ごとにグループ化
+  const categoryGroups = {};
+  allQuestions.forEach(q => {
+    const cat = q.category || 'その他';
+    if (!categoryGroups[cat]) categoryGroups[cat] = [];
+    categoryGroups[cat].push(q);
+  });
+
+  // 各分野シャッフル
+  const shuffledGroups = {};
+  for (const cat in categoryGroups) {
+    shuffledGroups[cat] = shuffleArray([...categoryGroups[cat]]);
+  }
+
+  const categories = Object.keys(categoryGroups);
+  const allocations = {};
+  let allocatedTotal = 0;
+
+  // 1次割り当て: 比率計算 (targetCount >= カテゴリ数の場合は各カテゴリ最低1問を保証)
+  categories.forEach(cat => {
+    const ratio = SYLLABUS_RATIOS[cat] || (1 / categories.length);
+    let count = Math.floor(targetCount * ratio);
+    if (targetCount >= categories.length && count === 0) {
+      count = 1;
+    }
+    count = Math.min(count, shuffledGroups[cat].length);
+    allocations[cat] = count;
+    allocatedTotal += count;
+  });
+
+  // 余り調整（比率の高い順、または問題ストックのあるカテゴリに追加配分）
+  while (allocatedTotal < targetCount) {
+    let added = false;
+    const sortedCats = [...categories].sort((a, b) => {
+      const weightA = SYLLABUS_RATIOS[a] || 0;
+      const weightB = SYLLABUS_RATIOS[b] || 0;
+      return weightB - weightA;
+    });
+
+    for (const cat of sortedCats) {
+      if (allocations[cat] < shuffledGroups[cat].length) {
+        allocations[cat]++;
+        allocatedTotal++;
+        added = true;
+        if (allocatedTotal >= targetCount) break;
+      }
+    }
+    if (!added) break;
+  }
+
+  // 最低1問保証等で超過した場合の調整
+  while (allocatedTotal > targetCount) {
+    const sortedCats = [...categories].sort((a, b) => allocations[b] - allocations[a]);
+    if (allocations[sortedCats[0]] > 1) {
+      allocations[sortedCats[0]]--;
+      allocatedTotal--;
+    } else {
+      break;
+    }
+  }
+
+  // 各分野から抽出して結合
+  let sampled = [];
+  categories.forEach(cat => {
+    const pickCount = allocations[cat] || 0;
+    sampled.push(...shuffledGroups[cat].slice(0, pickCount));
+  });
+
+  // 全体をシャッフルして出題順をランダム化
+  return shuffleArray(sampled);
+}
+
 function startExam() {
   stopSpeaking();
   const countVal = elements.examCountSelect.value;
   const count = countVal === 'all' ? state.questions.length : parseInt(countVal, 10);
-  const shuffled = shuffleArray(state.questions).slice(0, Math.min(count, state.questions.length));
+  const shuffled = sampleStratifiedQuestions(state.questions, count);
 
   if (shuffled.length === 0) {
     alert("出題可能な問題がありません。先に問題を登録してください。");
@@ -815,11 +906,68 @@ function finishExam() {
     elements.resultFeedback.textContent = "合格目安は70%以上です。間違えた問題の解説を熟読し、知識を定着させましょう。";
   }
 
+  // 分野別 得点率・出題配分分析
+  const categoryStats = {};
+  state.exam.questions.forEach((q, idx) => {
+    const cat = q.category || 'その他';
+    if (!categoryStats[cat]) {
+      categoryStats[cat] = { total: 0, correct: 0 };
+    }
+    categoryStats[cat].total++;
+    if (state.exam.answers[idx] === q.answer) {
+      categoryStats[cat].correct++;
+    }
+  });
+  renderCategoryBreakdown(categoryStats, total);
+
   renderReviewList('all');
 
   elements.examPlayView.classList.add('hidden');
   elements.examResultView.classList.remove('hidden');
   document.body.classList.remove('in-exam');
+}
+
+function renderCategoryBreakdown(categoryStats, examTotal) {
+  if (!elements.categoryBreakdownList) return;
+  elements.categoryBreakdownList.innerHTML = '';
+
+  const catNames = Object.keys(categoryStats);
+  if (catNames.length === 0) return;
+
+  catNames.forEach(catName => {
+    const stat = categoryStats[catName];
+    const accuracy = stat.total > 0 ? Math.round((stat.correct / stat.total) * 100) : 0;
+    const sharePercent = examTotal > 0 ? Math.round((stat.total / examTotal) * 100) : 0;
+
+    let statusClass = 'pass';
+    let statusText = '合格水準';
+    if (accuracy < 60) {
+      statusClass = 'danger';
+      statusText = '要重点復習';
+    } else if (accuracy < 70) {
+      statusClass = 'warning';
+      statusText = 'あと少し';
+    }
+
+    const row = document.createElement('div');
+    row.className = 'cat-breakdown-row';
+    row.innerHTML = `
+      <div class="cat-breakdown-info">
+        <div class="cat-name-label">
+          <span>${escapeHtml(catName)}</span>
+          <span style="font-weight:400; color:#64748b; font-size:0.78rem;">(${stat.correct}/${stat.total}問・出題比率${sharePercent}%)</span>
+        </div>
+        <div class="cat-score-text">
+          <span>${accuracy}%</span>
+          <span class="cat-status-badge ${statusClass}">${statusText}</span>
+        </div>
+      </div>
+      <div class="cat-progress-track">
+        <div class="cat-progress-bar ${statusClass}" style="width: ${accuracy}%;"></div>
+      </div>
+    `;
+    elements.categoryBreakdownList.appendChild(row);
+  });
 }
 
 function renderReviewList(filter = 'all') {
