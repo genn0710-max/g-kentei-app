@@ -1,13 +1,16 @@
-// G検定学習システム Service Worker v4.0 (260問拡充・用語168語・シラバス層化抽出・分野別分析)
-const CACHE_NAME = 'gkentei-v4.0';
+// G検定学習システム Service Worker v4.1 (260問拡充・用語168語・ルート/data両対応・シラバス層化抽出・分野別分析)
+const CACHE_NAME = 'gkentei-v4.1';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
   './style.css',
-  './style.css?v=4.0',
+  './style.css?v=4.1',
   './app.js',
-  './app.js?v=4.0',
+  './app.js?v=4.1',
   './manifest.json',
+  './categories.json',
+  './questions.json',
+  './terms.json',
   './data/categories.json',
   './data/questions.json',
   './data/terms.json'
