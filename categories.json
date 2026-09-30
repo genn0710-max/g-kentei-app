@@ -1,0 +1,37 @@
+[
+  {
+    "id": "cat_history",
+    "name": "人工知能の定義と歴史",
+    "description": "第1次〜第3次AIブーム、探索・推論、エキスパートシステム、冬の時代"
+  },
+  {
+    "id": "cat_ml",
+    "name": "機械学習の具体的手法",
+    "description": "教師あり/なし学習、回帰、分類、SVM、決定木、ランダムフォレスト、アンサンブル学習、評価指標"
+  },
+  {
+    "id": "cat_dl_basic",
+    "name": "ディープラーニングの概要と要素技術",
+    "description": "ニューラルネットワーク、活性化関数、誤差逆伝播法、最適化手法、正則化、過学習対策"
+  },
+  {
+    "id": "cat_cv",
+    "name": "画像認識（CNNとその発展）",
+    "description": "CNN、畳み込み・プーリング、代表的モデル（LeNet, AlexNet, VGG, ResNet）、物体検出、セグメンテーション"
+  },
+  {
+    "id": "cat_nlp_gen",
+    "name": "自然言語処理・音声・生成AI",
+    "description": "RNN, LSTM, Attention, Transformer, BERT, GPT, 大規模言語モデル(LLM), 拡散モデル, GAN"
+  },
+  {
+    "id": "cat_rl",
+    "name": "強化学習",
+    "description": "MDP、Q学習、SARSA、DQN、Policy Gradient、Actor-Critic、AlphaGo"
+  },
+  {
+    "id": "cat_law_ethics",
+    "name": "AIの社会実装・法律・倫理",
+    "description": "個人情報保護法、著作権法、特許法、AI倫理原則、XAI（説明可能AI）、バイアス、セキュリティ"
+  }
+]

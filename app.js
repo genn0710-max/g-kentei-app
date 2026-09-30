@@ -449,6 +449,39 @@ function saveStoredManualQuestions(questions) {
   }
 }
 
+// 静的JSONリソースの多重探索・キャッシュ無効化・最新拡充データ自動優先取得
+async function fetchSmartResource(fileName) {
+  const cacheBuster = `v=4.1&t=${Date.now()}`;
+  const candidates = [
+    `data/${fileName}?${cacheBuster}`,
+    `${fileName}?${cacheBuster}`,
+    `data/${fileName}`,
+    `${fileName}`
+  ];
+  const results = [];
+
+  for (const url of candidates) {
+    try {
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          results.push(data);
+        }
+      }
+    } catch (e) {
+      // 候補を順次フォールバック
+    }
+  }
+
+  if (results.length > 0) {
+    // 取得できた中で最も件数の多い配列を自動採用（古いデータやキャッシュより新しい拡充データを優先）
+    results.sort((a, b) => b.length - a.length);
+    return results[0];
+  }
+  throw new Error(`リソースの読み込みに失敗しました: ${fileName}`);
+}
+
 async function initApp() {
   initTTS();
   setupTabs();
@@ -463,7 +496,7 @@ async function initApp() {
         if (!newWorker) return;
         newWorker.addEventListener('statechange', () => {
           if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-            showToast("✨ 最新バージョン(v4.0)に自動更新されました！");
+            showToast("✨ 最新バージョン(v4.1)に自動更新されました！");
           }
         });
       });
@@ -473,11 +506,11 @@ async function initApp() {
   }
 
   try {
-    // 1. 静的JSONファイルからデータを読み込み（GitHub Pages・オフライン環境で100%動作）
+    // 1. 静的JSONファイルからデータを読み込み（GitHub Pagesルート配置/data配置の両対応 & キャッシュ無効化 & 最大件数自動選択）
     const [catRes, qRes, termsRes] = await Promise.all([
-      fetch('data/categories.json').then(r => r.json()),
-      fetch('data/questions.json').then(r => r.json()),
-      fetch('data/terms.json').then(r => r.json())
+      fetchSmartResource('categories.json'),
+      fetchSmartResource('questions.json'),
+      fetchSmartResource('terms.json')
     ]);
 
     state.categories = catRes;
