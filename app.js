@@ -38,6 +38,7 @@ const state = {
   tts: {
     synth: window.speechSynthesis,
     voice: null,
+    enVoice: null,
     rate: 1.0,
     isSpeaking: false,
     isPaused: false,
@@ -260,17 +261,32 @@ function initTTS() {
     return;
   }
 
-  function pickJapaneseVoice() {
+  function pickVoices() {
     const voices = state.tts.synth.getVoices();
-    const jaVoice = voices.find(v => v.lang.includes('ja') || v.lang.includes('JP'));
-    if (jaVoice) {
-      state.tts.voice = jaVoice;
+    if (!voices || voices.length === 0) return;
+
+    // 1. 高品質な日本語音声の選定（Siri, Kyoko, Otoya, Google, Enhanced等を優先）
+    const jaVoices = voices.filter(v => v.lang.includes('ja') || v.lang.includes('JP'));
+    const preferredJa = jaVoices.find(v => (v.name.includes('Siri') || v.name.includes('Kyoko') || v.name.includes('Otoya') || v.name.includes('Google') || v.name.includes('Natural')) && !v.name.includes('Compact'))
+      || jaVoices.find(v => !v.name.includes('Compact'))
+      || jaVoices[0];
+    if (preferredJa) {
+      state.tts.voice = preferredJa;
+    }
+
+    // 2. 本格的な英語ネイティブ音声の選定（Samantha, Karen, Daniel, Siri, Google US English等）
+    const enVoices = voices.filter(v => v.lang.startsWith('en'));
+    const preferredEn = enVoices.find(v => (v.name.includes('Siri') || v.name.includes('Samantha') || v.name.includes('Karen') || v.name.includes('Daniel') || v.name.includes('Google US') || v.name.includes('Natural')) && !v.name.includes('Compact'))
+      || enVoices.find(v => v.lang.includes('US') || v.lang.includes('GB'))
+      || enVoices[0];
+    if (preferredEn) {
+      state.tts.enVoice = preferredEn;
     }
   }
 
-  pickJapaneseVoice();
+  pickVoices();
   if (speechSynthesis.onvoiceschanged !== undefined) {
-    speechSynthesis.onvoiceschanged = pickJapaneseVoice;
+    speechSynthesis.onvoiceschanged = pickVoices;
   }
 }
 
@@ -353,80 +369,104 @@ function cleanTextForSpeech(text) {
     .replace(/意味解析/g, 'いみかいせき')
     .replace(/線形回帰/g, 'せんけいかいき')
     .replace(/非線形/g, 'ひせんけい')
-    // G検定・主要AI用語の読み仮名補正
-    .replace(/(?<![a-zA-Z])G検定/g, 'ジーけんてい')
-    .replace(/(?<![a-zA-Z])ChatGPT(?![a-zA-Z])/gi, 'チャットジーピーティー')
-    .replace(/(?<![a-zA-Z])GPT(?![a-zA-Z])/g, 'ジーピーティー')
-    .replace(/(?<![a-zA-Z])CNN(?![a-zA-Z])/g, 'シーエヌエヌ')
-    .replace(/(?<![a-zA-Z])RNN(?![a-zA-Z])/g, 'アールエヌエヌ')
-    .replace(/(?<![a-zA-Z])DNN(?![a-zA-Z])/g, 'ディーエヌエヌ')
-    .replace(/(?<![a-zA-Z])ANN(?![a-zA-Z])/g, 'エーエヌエヌ')
-    .replace(/(?<![a-zA-Z])LLM(?![a-zA-Z])/g, 'エルエルエム')
-    .replace(/(?<![a-zA-Z])NLP(?![a-zA-Z])/g, 'エヌエルピー')
-    .replace(/(?<![a-zA-Z])GPU(?![a-zA-Z])/g, 'ジーピーユー')
-    .replace(/(?<![a-zA-Z])CPU(?![a-zA-Z])/g, 'シーピーユー')
-    .replace(/(?<![a-zA-Z])TPU(?![a-zA-Z])/g, 'ティーピーユー')
-    .replace(/(?<![a-zA-Z])SVM(?![a-zA-Z])/g, 'エスブイエム')
-    .replace(/(?<![a-zA-Z])SGD(?![a-zA-Z])/g, 'エスジーディー')
-    .replace(/(?<![a-zA-Z])IoT(?![a-zA-Z])/g, 'アイオーティー')
-    .replace(/(?<![a-zA-Z])DX(?![a-zA-Z])/g, 'ディーエックス')
-    .replace(/(?<![a-zA-Z])DQN(?![a-zA-Z])/g, 'ディーキューエヌ')
-    .replace(/(?<![a-zA-Z])VAE(?![a-zA-Z])/g, 'ブイエーイー')
-    .replace(/(?<![a-zA-Z])GAN(?![a-zA-Z])/g, 'ガン')
-    .replace(/(?<![a-zA-Z])AGI(?![a-zA-Z])/g, 'エージーアイ')
-    .replace(/(?<![a-zA-Z])BERT(?![a-zA-Z])/g, 'バート')
-    .replace(/(?<![a-zA-Z])RL(?![a-zA-Z])/g, 'アールエル')
-    .replace(/(?<![a-zA-Z])ML(?![a-zA-Z])/g, 'エムエル')
-    .replace(/(?<![a-zA-Z])MDP(?![a-zA-Z])/g, 'エムディーピー')
-    .replace(/(?<![a-zA-Z])RAG(?![a-zA-Z])/g, 'ラグ')
-    .replace(/(?<![a-zA-Z])LoRA(?![a-zA-Z])/g, 'ローラ')
-    .replace(/(?<![a-zA-Z])ViT(?![a-zA-Z])/g, 'ヴィット')
-    .replace(/(?<![a-zA-Z])ROC(?![a-zA-Z])/g, 'アールオーシー')
-    .replace(/(?<![a-zA-Z])AUC(?![a-zA-Z])/g, 'エーユーシー')
-    .replace(/(?<![a-zA-Z])PCA(?![a-zA-Z])/g, 'ピーシーエー')
-    .replace(/(?<![a-zA-Z])t-SNE(?![a-zA-Z])/gi, 'ティースニー')
-    .replace(/(?<![a-zA-Z])AdamW(?![a-zA-Z])/gi, 'アダムダブリュー')
-    .replace(/(?<![a-zA-Z])Adam(?![a-zA-Z])/gi, 'アダム')
-    .replace(/(?<![a-zA-Z])PPO(?![a-zA-Z])/g, 'ピーピーオー')
-    .replace(/(?<![a-zA-Z])RLHF(?![a-zA-Z])/g, 'アールエルエイチエフ')
-    .replace(/(?<![a-zA-Z])DPO(?![a-zA-Z])/g, 'ディーピーオー')
-    .replace(/(?<![a-zA-Z])SHAP(?![a-zA-Z])/gi, 'シャップ')
-    .replace(/(?<![a-zA-Z])LIME(?![a-zA-Z])/gi, 'ライム')
-    .replace(/(?<![a-zA-Z])YOLO(?![a-zA-Z])/gi, 'ヨーロ')
-    .replace(/(?<![a-zA-Z])SSD(?![a-zA-Z])/g, 'エスエスディー')
-    .replace(/(?<![a-zA-Z])ResNet(?![a-zA-Z])/gi, 'レズネット')
-    .replace(/(?<![a-zA-Z])AlexNet(?![a-zA-Z])/gi, 'アレックスネット')
-    .replace(/(?<![a-zA-Z])LeNet(?![a-zA-Z])/gi, 'ルネット')
-    .replace(/(?<![a-zA-Z])VGG(?![a-zA-Z])/gi, 'ブイジージー')
-    .replace(/(?<![a-zA-Z])ReLU(?![a-zA-Z])/gi, 'レルー')
-    .replace(/(?<![a-zA-Z])GELU(?![a-zA-Z])/gi, 'ゲルー')
-    .replace(/(?<![a-zA-Z])Swish(?![a-zA-Z])/gi, 'スウィッシュ')
-    .replace(/(?<![a-zA-Z])Sigmoid(?![a-zA-Z])/gi, 'シグモイド')
-    .replace(/(?<![a-zA-Z])Softmax(?![a-zA-Z])/gi, 'ソフトマックス')
-    .replace(/(?<![a-zA-Z])Dropout(?![a-zA-Z])/gi, 'ドロップアウト')
-    .replace(/(?<![a-zA-Z])IoU(?![a-zA-Z])/gi, 'アイオーユー')
-    .replace(/(?<![a-zA-Z])mAP(?![a-zA-Z])/gi, 'エムエーピー')
-    .replace(/(?<![a-zA-Z])FCN(?![a-zA-Z])/gi, 'エフシーエヌ')
-    .replace(/(?<![a-zA-Z])U-Net(?![a-zA-Z])/gi, 'ユーネット')
-    .replace(/(?<![a-zA-Z])Seq2Seq(?![a-zA-Z])/gi, 'セックツーセック')
-    .replace(/(?<![a-zA-Z])AlphaGo(?![a-zA-Z])/gi, 'アルファ碁')
-    .replace(/(?<![a-zA-Z])ELIZA(?![a-zA-Z])/gi, 'イライザ')
-    .replace(/(?<![a-zA-Z])MYCIN(?![a-zA-Z])/gi, 'マイシン')
-    .replace(/(?<![a-zA-Z])DENDRAL(?![a-zA-Z])/gi, 'デンドラル')
-    .replace(/k-means/gi, 'ケーミーンズ')
-    .replace(/k-NN/gi, 'ケーエヌエヌ')
-    .replace(/GBDT/gi, 'ジービーディーティー')
-    .replace(/LightGBM/gi, 'ライトジービーエム')
-    .replace(/XGBoost/gi, 'エックスジーブースト')
-    .replace(/CatBoost/gi, 'キャットブースト')
-    .replace(/CLIP/gi, 'クリップ')
-    .replace(/Whisper/gi, 'ウィスパー')
-    .replace(/SARSA/gi, 'サルサ')
-    .replace(/ε-greedy/gi, 'イプシロングリーディ')
-    .replace(/Actor-Critic/gi, 'アクタークリティック')
+    // G検定・主要AI用語の読み仮名・表記補正（英語・アルファベットはネイティブ英語エンジンで発音）
+    .replace(/(?<![a-zA-Z])G検定/g, 'G検定')
+    .replace(/(?<![a-zA-Z])ChatGPT(?![a-zA-Z])/gi, 'ChatGPT')
+    .replace(/(?<![a-zA-Z])GPT(?![a-zA-Z])/g, 'GPT')
+    .replace(/(?<![a-zA-Z])CNN(?![a-zA-Z])/g, 'CNN')
+    .replace(/(?<![a-zA-Z])RNN(?![a-zA-Z])/g, 'RNN')
+    .replace(/(?<![a-zA-Z])DNN(?![a-zA-Z])/g, 'DNN')
+    .replace(/(?<![a-zA-Z])ANN(?![a-zA-Z])/g, 'ANN')
+    .replace(/(?<![a-zA-Z])LLM(?![a-zA-Z])/g, 'LLM')
+    .replace(/(?<![a-zA-Z])NLP(?![a-zA-Z])/g, 'NLP')
+    .replace(/(?<![a-zA-Z])GPU(?![a-zA-Z])/g, 'GPU')
+    .replace(/(?<![a-zA-Z])CPU(?![a-zA-Z])/g, 'CPU')
+    .replace(/(?<![a-zA-Z])TPU(?![a-zA-Z])/g, 'TPU')
+    .replace(/(?<![a-zA-Z])SVM(?![a-zA-Z])/g, 'SVM')
+    .replace(/(?<![a-zA-Z])SGD(?![a-zA-Z])/g, 'SGD')
+    .replace(/(?<![a-zA-Z])IoT(?![a-zA-Z])/g, 'IoT')
+    .replace(/(?<![a-zA-Z])DX(?![a-zA-Z])/g, 'DX')
+    .replace(/(?<![a-zA-Z])DQN(?![a-zA-Z])/g, 'DQN')
+    .replace(/(?<![a-zA-Z])VAE(?![a-zA-Z])/g, 'VAE')
+    .replace(/(?<![a-zA-Z])GAN(?![a-zA-Z])/g, 'GAN')
+    .replace(/(?<![a-zA-Z])AGI(?![a-zA-Z])/g, 'AGI')
+    .replace(/(?<![a-zA-Z])BERT(?![a-zA-Z])/g, 'BERT')
+    .replace(/(?<![a-zA-Z])RL(?![a-zA-Z])/g, 'RL')
+    .replace(/(?<![a-zA-Z])ML(?![a-zA-Z])/g, 'ML')
+    .replace(/(?<![a-zA-Z])MDP(?![a-zA-Z])/g, 'MDP')
+    .replace(/(?<![a-zA-Z])RAG(?![a-zA-Z])/g, 'RAG')
+    .replace(/(?<![a-zA-Z])LoRA(?![a-zA-Z])/g, 'LoRA')
+    .replace(/(?<![a-zA-Z])ViT(?![a-zA-Z])/g, 'ViT')
+    .replace(/(?<![a-zA-Z])ROC(?![a-zA-Z])/g, 'ROC')
+    .replace(/(?<![a-zA-Z])AUC(?![a-zA-Z])/g, 'AUC')
+    .replace(/(?<![a-zA-Z])PCA(?![a-zA-Z])/g, 'PCA')
+    .replace(/(?<![a-zA-Z])t-SNE(?![a-zA-Z])/gi, 't-SNE')
+    .replace(/(?<![a-zA-Z])AdamW(?![a-zA-Z])/gi, 'AdamW')
+    .replace(/(?<![a-zA-Z])Adam(?![a-zA-Z])/gi, 'Adam')
+    .replace(/(?<![a-zA-Z])PPO(?![a-zA-Z])/g, 'PPO')
+    .replace(/(?<![a-zA-Z])RLHF(?![a-zA-Z])/g, 'RLHF')
+    .replace(/(?<![a-zA-Z])DPO(?![a-zA-Z])/g, 'DPO')
+    .replace(/(?<![a-zA-Z])SHAP(?![a-zA-Z])/gi, 'SHAP')
+    .replace(/(?<![a-zA-Z])LIME(?![a-zA-Z])/gi, 'LIME')
+    .replace(/(?<![a-zA-Z])YOLO(?![a-zA-Z])/gi, 'YOLO')
+    .replace(/(?<![a-zA-Z])SSD(?![a-zA-Z])/g, 'SSD')
+    .replace(/(?<![a-zA-Z])ResNet(?![a-zA-Z])/gi, 'ResNet')
+    .replace(/(?<![a-zA-Z])AlexNet(?![a-zA-Z])/gi, 'AlexNet')
+    .replace(/(?<![a-zA-Z])LeNet(?![a-zA-Z])/gi, 'LeNet')
+    .replace(/(?<![a-zA-Z])VGG(?![a-zA-Z])/gi, 'VGG')
+    .replace(/(?<![a-zA-Z])ReLU(?![a-zA-Z])/gi, 'ReLU')
+    .replace(/(?<![a-zA-Z])GELU(?![a-zA-Z])/gi, 'GELU')
+    .replace(/(?<![a-zA-Z])Swish(?![a-zA-Z])/gi, 'Swish')
+    .replace(/(?<![a-zA-Z])Sigmoid(?![a-zA-Z])/gi, 'Sigmoid')
+    .replace(/(?<![a-zA-Z])Softmax(?![a-zA-Z])/gi, 'Softmax')
+    .replace(/(?<![a-zA-Z])Dropout(?![a-zA-Z])/gi, 'Dropout')
+    .replace(/(?<![a-zA-Z])IoU(?![a-zA-Z])/gi, 'IoU')
+    .replace(/(?<![a-zA-Z])mAP(?![a-zA-Z])/gi, 'mAP')
+    .replace(/(?<![a-zA-Z])FCN(?![a-zA-Z])/gi, 'FCN')
+    .replace(/(?<![a-zA-Z])U-Net(?![a-zA-Z])/gi, 'U-Net')
+    .replace(/(?<![a-zA-Z])Seq2Seq(?![a-zA-Z])/gi, 'Seq2Seq')
+    .replace(/(?<![a-zA-Z])AlphaGo(?![a-zA-Z])/gi, 'AlphaGo')
+    .replace(/(?<![a-zA-Z])ELIZA(?![a-zA-Z])/gi, 'ELIZA')
+    .replace(/(?<![a-zA-Z])MYCIN(?![a-zA-Z])/gi, 'MYCIN')
+    .replace(/(?<![a-zA-Z])DENDRAL(?![a-zA-Z])/gi, 'DENDRAL')
+    .replace(/k-means/gi, 'k-means')
+    .replace(/k-NN/gi, 'k-NN')
+    .replace(/GBDT/gi, 'GBDT')
+    .replace(/LightGBM/gi, 'LightGBM')
+    .replace(/XGBoost/gi, 'XGBoost')
+    .replace(/CatBoost/gi, 'CatBoost')
+    .replace(/CLIP/gi, 'CLIP')
+    .replace(/Whisper/gi, 'Whisper')
+    .replace(/SARSA/gi, 'SARSA')
+    .replace(/ε-greedy/gi, 'Epsilon Greedy')
+    .replace(/Actor-Critic/gi, 'Actor-Critic')
     .replace(/\n+/g, '。 ');
 
   return clean;
+}
+
+// 日英ハイブリッド音声合成用: テキストを日本語と本格英語（アルファベット）チャンクに最適分割
+function splitTextByLanguage(text) {
+  if (!text) return [];
+  const chunks = [];
+  // 英字を含むトークン列（スペース区切りの連続する英単語群も1塊として認識）
+  const regex = /([a-zA-Z][a-zA-Z0-9\-_]*(?:\s+[a-zA-Z][a-zA-Z0-9\-_]*)*)/g;
+  let lastIndex = 0;
+  let match;
+
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      const jaPart = text.slice(lastIndex, match.index);
+      if (jaPart) chunks.push({ text: jaPart, lang: 'ja' });
+    }
+    chunks.push({ text: match[0], lang: 'en' });
+    lastIndex = regex.lastIndex;
+  }
+  if (lastIndex < text.length) {
+    const remaining = text.slice(lastIndex);
+    if (remaining) chunks.push({ text: remaining, lang: 'ja' });
+  }
+  return chunks;
 }
 
 function speakText(text, title = "音声読み上げ中...") {
@@ -439,37 +479,65 @@ function speakText(text, title = "音声読み上げ中...") {
 
   // 読み上げテキストのクリーンアップ（記号・専門用語発音補正）
   const cleanText = cleanTextForSpeech(text);
+  const chunks = splitTextByLanguage(cleanText);
 
-  const utterance = new SpeechSynthesisUtterance(cleanText);
-  if (state.tts.voice) utterance.voice = state.tts.voice;
-  utterance.lang = 'ja-JP';
-  utterance.rate = state.tts.rate;
-  utterance.pitch = 1.0;
+  if (chunks.length === 0) return;
 
-  utterance.onstart = () => {
-    state.tts.isSpeaking = true;
-    state.tts.isPaused = false;
-    elements.audioBar.classList.remove('hidden');
-    elements.audioReadingTitle.textContent = title;
-    elements.btnAudioPlayPause.textContent = '⏸';
-  };
+  let chunkIdx = 0;
 
-  utterance.onend = () => {
-    // キューがある場合は次を再生
-    if (state.tts.queue.length > 0) {
-      const next = state.tts.queue.shift();
-      speakText(next.text, next.title);
-    } else {
-      stopSpeaking();
+  function speakNextChunk() {
+    if (chunkIdx >= chunks.length) {
+      if (state.tts.queue.length > 0) {
+        const next = state.tts.queue.shift();
+        speakText(next.text, next.title);
+      } else {
+        stopSpeaking();
+      }
+      return;
     }
-  };
 
-  utterance.onerror = (e) => {
-    console.error("TTS Error:", e);
-    stopSpeaking();
-  };
+    const chunk = chunks[chunkIdx];
+    chunkIdx++;
 
-  state.tts.synth.speak(utterance);
+    const isEn = (chunk.lang === 'en');
+    const utterance = new SpeechSynthesisUtterance(chunk.text);
+    
+    // 英語部分は英語ネイティブ音声（en-US/en-GB）、日本語部分は日本語音声（ja-JP）を使用
+    if (isEn && state.tts.enVoice) {
+      utterance.voice = state.tts.enVoice;
+      utterance.lang = state.tts.enVoice.lang || 'en-US';
+    } else if (!isEn && state.tts.voice) {
+      utterance.voice = state.tts.voice;
+      utterance.lang = 'ja-JP';
+    } else {
+      utterance.lang = isEn ? 'en-US' : 'ja-JP';
+    }
+
+    utterance.rate = state.tts.rate;
+    utterance.pitch = 1.0;
+
+    utterance.onstart = () => {
+      state.tts.isSpeaking = true;
+      state.tts.isPaused = false;
+      elements.audioBar.classList.remove('hidden');
+      elements.audioReadingTitle.textContent = title;
+      elements.btnAudioPlayPause.textContent = '⏸';
+    };
+
+    utterance.onend = () => {
+      speakNextChunk();
+    };
+
+    utterance.onerror = (e) => {
+      if (e.error === 'interrupted' || e.error === 'canceled') return;
+      console.error("TTS Error:", e);
+      speakNextChunk();
+    };
+
+    state.tts.synth.speak(utterance);
+  }
+
+  speakNextChunk();
 }
 
 function togglePlayPauseSpeech() {
@@ -628,7 +696,7 @@ function saveStoredManualQuestions(questions) {
 
 // 静的JSONリソースの多重探索・キャッシュ無効化・最新拡充データ自動優先取得
 async function fetchSmartResource(fileName) {
-  const cacheBuster = `v=4.3&t=${Date.now()}`;
+  const cacheBuster = `v=4.4&t=${Date.now()}`;
   const candidates = [
     `data/${fileName}?${cacheBuster}`,
     `${fileName}?${cacheBuster}`,
@@ -673,7 +741,7 @@ async function initApp() {
         if (!newWorker) return;
         newWorker.addEventListener('statechange', () => {
           if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-            showToast("✨ 最新バージョン(v4.3)に自動更新されました！");
+            showToast("✨ 最新バージョン(v4.4)に自動更新されました！");
           }
         });
       });
@@ -2322,48 +2390,80 @@ function speakTextFlow(text, targetIndex, onEnd) {
     return;
   }
 
-  const utterance = new SpeechSynthesisUtterance(cleanText);
-  currentFlowUtterance = utterance;
-
-  if (state.tts.voice) utterance.voice = state.tts.voice;
-  utterance.lang = 'ja-JP';
-  utterance.rate = state.audioFlow.speed || 1.0;
-  utterance.pitch = 1.0;
-
-  let hasEnded = false;
-
-  utterance.onend = () => {
-    if (hasEnded) return;
-    hasEnded = true;
-    currentFlowUtterance = null;
-
-    if (state.audioFlow.isPlaying && !state.audioFlow.isPaused && state.audioFlow.currentIndex === targetIndex) {
-      if (onEnd) onEnd();
+  const chunks = splitTextByLanguage(cleanText);
+  if (chunks.length === 0) {
+    if (onEnd && state.audioFlow.isPlaying && !state.audioFlow.isPaused && state.audioFlow.currentIndex === targetIndex) {
+      onEnd();
     }
-  };
+    return;
+  }
 
-  utterance.onerror = (e) => {
-    if (hasEnded) return;
-    hasEnded = true;
-    currentFlowUtterance = null;
+  let chunkIdx = 0;
 
-    // スキップや一時停止等による正常な中断・キャンセルの場合は絶対に次へスキップしない
-    if (e.error === 'interrupted' || e.error === 'canceled') {
+  function speakNextFlowChunk() {
+    if (!state.audioFlow.isPlaying || state.audioFlow.isPaused || state.audioFlow.currentIndex !== targetIndex) {
+      currentFlowUtterance = null;
       return;
     }
 
-    console.warn("AudioFlow TTS Error:", e.error);
-    // エラー時の暴走を防ぐため、1.5秒待ってから次へ進む
-    if (state.audioFlow.isPlaying && !state.audioFlow.isPaused && state.audioFlow.currentIndex === targetIndex) {
-      state.audioFlow.timerId = setTimeout(() => {
-        if (state.audioFlow.isPlaying && !state.audioFlow.isPaused && state.audioFlow.currentIndex === targetIndex) {
-          if (onEnd) onEnd();
-        }
-      }, 1500);
+    if (chunkIdx >= chunks.length) {
+      currentFlowUtterance = null;
+      if (onEnd && state.audioFlow.isPlaying && !state.audioFlow.isPaused && state.audioFlow.currentIndex === targetIndex) {
+        onEnd();
+      }
+      return;
     }
-  };
 
-  state.tts.synth.speak(utterance);
+    const chunk = chunks[chunkIdx];
+    chunkIdx++;
+
+    const isEn = (chunk.lang === 'en');
+    const utterance = new SpeechSynthesisUtterance(chunk.text);
+    currentFlowUtterance = utterance;
+
+    // 英語部分は英語ネイティブ音声（en-US/en-GB）、日本語部分は日本語音声（ja-JP）を使用
+    if (isEn && state.tts.enVoice) {
+      utterance.voice = state.tts.enVoice;
+      utterance.lang = state.tts.enVoice.lang || 'en-US';
+    } else if (!isEn && state.tts.voice) {
+      utterance.voice = state.tts.voice;
+      utterance.lang = 'ja-JP';
+    } else {
+      utterance.lang = isEn ? 'en-US' : 'ja-JP';
+    }
+
+    utterance.rate = state.audioFlow.speed || 1.0;
+    utterance.pitch = 1.0;
+
+    let hasEnded = false;
+
+    utterance.onend = () => {
+      if (hasEnded) return;
+      hasEnded = true;
+      speakNextFlowChunk();
+    };
+
+    utterance.onerror = (e) => {
+      if (hasEnded) return;
+      hasEnded = true;
+      currentFlowUtterance = null;
+
+      // スキップや一時停止等による正常な中断・キャンセルの場合は絶対に次へスキップしない
+      if (e.error === 'interrupted' || e.error === 'canceled') {
+        return;
+      }
+
+      console.warn("AudioFlow TTS Error:", e.error);
+      // エラー時も次のチャンクへ復帰
+      if (state.audioFlow.isPlaying && !state.audioFlow.isPaused && state.audioFlow.currentIndex === targetIndex) {
+        speakNextFlowChunk();
+      }
+    };
+
+    state.tts.synth.speak(utterance);
+  }
+
+  speakNextFlowChunk();
 }
 
 function playAudioFlowCurrentItem() {

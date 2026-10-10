@@ -1,12 +1,12 @@
-// G検定学習システム Service Worker v4.3 (正確な専門用語発音補正・読み上げ箇所ハイライト追従強化)
-const CACHE_NAME = 'gkentei-v4.3';
+// G検定学習システム Service Worker v4.4 (日英ハイブリッド音声合成・アルファベット本格英語発音)
+const CACHE_NAME = 'gkentei-v4.4';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
   './style.css',
-  './style.css?v=4.3',
+  './style.css?v=4.4',
   './app.js',
-  './app.js?v=4.3',
+  './app.js?v=4.4',
   './manifest.json',
   './categories.json',
   './questions.json',
