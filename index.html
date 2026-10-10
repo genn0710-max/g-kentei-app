@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>G検定 完全対策システム (JDLAシラバス準拠・スタンドアローン)</title>
-  <link rel="stylesheet" href="style.css?v=4.1">
+  <link rel="stylesheet" href="style.css?v=4.3">
   <link rel="manifest" href="manifest.json">
   <link rel="icon" type="image/png" href="icon.png">
   <link rel="apple-touch-icon" href="icon.png">
@@ -27,7 +27,7 @@
         </div>
       </div>
       <div class="header-stats">
-        <div class="stat-pill version-pill" id="app-version-pill" title="アプリのバージョン">v4.1</div>
+        <div class="stat-pill version-pill" id="app-version-pill" title="アプリのバージョン">v4.3</div>
         <div class="stat-pill"><span class="stat-label">総問題数:</span> <strong id="header-q-count">--</strong> 問</div>
         <div class="stat-pill"><span class="stat-label">重要用語:</span> <strong id="header-t-count">--</strong> 語</div>
         <div class="stat-pill port-pill"><span class="pulse-dot"></span> <span id="header-port">稼働中</span></div>
@@ -308,7 +308,8 @@
             <p class="subtitle">画面を見ずに音声だけで各分野の問題・正解・詳細解説や重要用語を連続インプット。通勤中・運動中・就寝前の耳学習に最適です。</p>
           </div>
           <div class="flow-mode-switch">
-            <button class="btn flow-mode-btn active" id="btn-flow-mode-questions" data-flow-mode="questions">📚 問題＋詳細解説</button>
+            <button class="btn flow-mode-btn active" id="btn-flow-mode-questions" data-flow-mode="questions">📚 実践問題</button>
+            <button class="btn flow-mode-btn" id="btn-flow-mode-relation" data-flow-mode="relation">🔗 リレーション特訓</button>
             <button class="btn flow-mode-btn" id="btn-flow-mode-terms" data-flow-mode="terms">📖 重要用語集</button>
           </div>
         </div>
@@ -386,6 +387,20 @@
           <div class="flow-item-explanation-box hidden" id="flow-item-explanation-box">
             <div class="flow-exp-label">詳細解説:</div>
             <div class="flow-exp-text" id="flow-item-explanation-text"></div>
+          </div>
+          <!-- 知識のリレーション・体系的つながりボックス -->
+          <div class="flow-item-relation-box hidden" id="flow-item-relation-box">
+            <div class="flow-rel-header">
+              <span class="flow-rel-icon">🔗</span>
+              <span class="flow-rel-title">体系的リレーション（関連重要用語・出題文脈）</span>
+            </div>
+            <div class="flow-rel-terms-container" id="flow-rel-terms-container">
+              <!-- 動的生成: 関連用語バッジ（タップで即モーダル確認） -->
+            </div>
+            <div class="flow-rel-note" id="flow-rel-note"></div>
+            <div class="flow-rel-questions-container hidden" id="flow-rel-questions-container">
+              <!-- 動的生成: 出題された実践問題へのジャンプボタン -->
+            </div>
           </div>
         </div>
 
@@ -540,6 +555,15 @@
         <span class="badge-tag mb-2" id="modal-term-category">分野</span>
         <div class="term-summary modal-summary" id="modal-term-summary">要約</div>
         <div class="term-details modal-details" id="modal-term-details">詳細解説</div>
+        <div class="modal-relation-section" id="modal-relation-section">
+          <div class="modal-relation-title">🔗 関連する重要用語・体系的つながり</div>
+          <div class="modal-related-terms" id="modal-related-terms"></div>
+          <div class="modal-relation-note" id="modal-relation-note"></div>
+          <div class="modal-related-questions-wrapper" id="modal-related-questions-wrapper">
+            <div class="modal-relation-title" style="margin-top:10px;">🎯 この用語が出題された実践問題</div>
+            <div class="modal-related-questions" id="modal-related-questions"></div>
+          </div>
+        </div>
       </div>
       <div class="modal-footer">
         <button id="modal-btn-speak" class="btn btn-outline btn-sm">🔊 音声で聞く</button>
@@ -551,6 +575,6 @@
   <!-- トースト通知 -->
   <div id="toast" class="toast hidden"></div>
 
-  <script src="app.js?v=4.1"></script>
+  <script src="app.js?v=4.3"></script>
 </body>
 </html>

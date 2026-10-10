@@ -1334,10 +1334,11 @@ body {
 /* 問題文・用語名 読み上げ中 */
 .flow-item-title.flow-reading-active {
   background: #eff6ff !important;
-  border-left: 5px solid var(--primary) !important;
-  padding: 10px 14px !important;
+  border-left: 5px solid #2563eb !important;
+  padding: 12px 16px !important;
   border-radius: 8px !important;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15) !important;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25) !important;
+  transition: all 0.25s ease-in-out;
 }
 
 /* 選択肢 読み上げ中 */
@@ -1345,7 +1346,7 @@ body {
   background: #eff6ff !important;
   border: 2px solid #2563eb !important;
   color: #1e3a8a !important;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2) !important;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.25) !important;
   transform: translateX(4px);
 }
 
@@ -1379,7 +1380,7 @@ body {
   background: #ecfdf5 !important;
   border: 2px solid #10b981 !important;
   color: #065f46 !important;
-  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.25) !important;
+  box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.3) !important;
 }
 
 .flow-choice-item.correct.flow-reading-active::after {
@@ -1391,15 +1392,202 @@ body {
 /* 正解ボックス / 要約ボックス 読み上げ中 */
 .flow-item-answer-box.flow-reading-active {
   border: 2px solid #10b981 !important;
-  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.22) !important;
+  box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.28) !important;
   background: #f0fdf4 !important;
+  transform: scale(1.01);
+  transition: all 0.25s ease-in-out;
 }
 
 /* 解説ボックス 読み上げ中 */
 .flow-item-explanation-box.flow-reading-active {
   border: 2px solid #2563eb !important;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2) !important;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.25) !important;
   background: #f8fafc !important;
+  transform: scale(1.01);
+  transition: all 0.25s ease-in-out;
+}
+
+/* 体系的リレーションボックス & 読み上げ中ハイライト */
+.flow-item-relation-box {
+  margin-top: 14px;
+  padding: 14px 18px;
+  background: linear-gradient(135deg, #f8faff 0%, #f5f3ff 100%);
+  border: 1px solid #c7d2fe;
+  border-radius: 12px;
+  transition: all 0.25s ease;
+}
+
+.flow-item-relation-box.flow-reading-active {
+  border: 2px solid #6366f1 !important;
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.25) !important;
+  background: linear-gradient(135deg, #eef2ff 0%, #ede9fe 100%) !important;
+  animation: pulseSpeaking 2s infinite ease-in-out;
+}
+
+.flow-rel-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.flow-rel-icon {
+  font-size: 1.1rem;
+}
+
+.flow-rel-title {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #4338ca;
+}
+
+.flow-rel-terms-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.rel-term-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: #ffffff;
+  border: 1px solid #c7d2fe;
+  border-radius: 9999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #4f46e5;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.rel-term-pill:hover {
+  background: #e0e7ff;
+  border-color: #818cf8;
+  transform: translateY(-1px);
+}
+
+.flow-rel-note {
+  font-size: 0.88rem;
+  line-height: 1.6;
+  color: #1e293b;
+  background: rgba(255, 255, 255, 0.75);
+  padding: 10px 14px;
+  border-radius: 8px;
+  border-left: 3px solid #6366f1;
+}
+
+.flow-rel-questions-container {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.rel-question-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 12px;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #065f46;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.rel-question-btn:hover {
+  background: #d1fae5;
+  border-color: #6ee7b7;
+}
+
+/* モーダル内リレーションセクション */
+.modal-relation-section {
+  margin-top: 14px;
+  padding: 12px 14px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+}
+
+.modal-relation-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #334155;
+  margin-bottom: 8px;
+}
+
+.modal-related-terms {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.modal-relation-note {
+  font-size: 0.85rem;
+  color: #475569;
+  line-height: 1.55;
+  background: #ffffff;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border-left: 3px solid #818cf8;
+  margin-bottom: 8px;
+}
+
+.modal-related-questions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* 解答解説画面・ドリル画面内のリレーション表示 */
+.review-relation-box {
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.review-rel-header {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #4f46e5;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.review-rel-terms {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 6px;
+}
+
+.review-rel-note {
+  font-size: 0.84rem;
+  color: #334155;
+  line-height: 1.5;
+}
+
+/* プレイリスト内のリレーションバッジ */
+.playlist-rel-badge {
+  font-size: 0.68rem;
+  padding: 2px 6px;
+  background: #ede9fe;
+  color: #5b21b6;
+  border-radius: 4px;
+  font-weight: 600;
+  margin-left: auto;
 }
 
 /* プレイリスト */
