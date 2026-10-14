@@ -1,21 +1,21 @@
 {
-  "name": "G検定 完全対策マスター (JDLAシラバス準拠)",
-  "short_name": "G検定対策",
-  "description": "本番120分200問対応・1問40秒ペースタイマー・音声解説・重要用語集付き学習システム",
+  "name": "G検定 2000問実戦問題集",
+  "short_name": "G検定問題集",
+  "description": "実務者向け G検定引っ掛け特化型2000問問題集＆フル模試",
   "start_url": "./index.html",
   "display": "standalone",
-  "background_color": "#f8fafc",
-  "theme_color": "#2563eb",
+  "background_color": "#020617",
+  "theme_color": "#020617",
   "icons": [
     {
-      "src": "icon.png",
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' rx='40' fill='%230284c7'/><text x='96' y='125' font-size='100' font-family='sans-serif' font-weight='bold' text-anchor='middle' fill='white'>G</text></svg>",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/svg+xml"
     },
     {
-      "src": "icon.png",
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect width='512' height='512' rx='100' fill='%230284c7'/><text x='256' y='340' font-size='280' font-family='sans-serif' font-weight='bold' text-anchor='middle' fill='white'>G</text></svg>",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/svg+xml"
     }
   ]
 }

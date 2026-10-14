@@ -2,579 +2,1114 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>G検定 完全対策システム (JDLAシラバス準拠・スタンドアローン)</title>
-  <link rel="stylesheet" href="style.css?v=4.4">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+  <title>G検定（ジェネラリスト）絶対合格プログラム【実務者向け 2,000問バンク】</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Vue 3 CDN -->
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <!-- 2000問問題バンク & 重要数値暗記データ -->
+  <script src="questions_bank.js"></script>
+  <script src="flashcards_data.js"></script>
+  <!-- スタイルシート -->
+  <link rel="stylesheet" href="style.css">
   <link rel="manifest" href="manifest.json">
-  <link rel="icon" type="image/png" href="icon.png">
-  <link rel="apple-touch-icon" href="icon.png">
-  <meta name="theme-color" content="#ffffff">
+  <!-- iOS PWA メタタグ -->
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="G検定問題集">
+  <meta name="theme-color" content="#020617">
+  <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%230284c7'/><text x='50' y='65' font-size='50' font-family='sans-serif' text-anchor='middle' fill='white'>G</text></svg>">
+  <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Noto Sans JP"', 'Inter', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    [v-cloak] { display: none; }
+    .timer-bar {
+      transition: width 0.25s linear, background-color 0.3s ease;
+    }
+  </style>
 </head>
-<body>
-  <!-- ヘッダー -->
-  <header class="app-header">
-    <div class="header-container">
-      <div class="brand">
-        <div class="logo-icon">JDLA</div>
-        <div class="brand-text">
-          <h1>G検定 完全対策マスター</h1>
-          <span class="badge-tag">スタンドアローン独立環境</span>
-        </div>
-      </div>
-      <div class="header-stats">
-        <div class="stat-pill version-pill" id="app-version-pill" title="アプリのバージョン">v4.4</div>
-        <div class="stat-pill"><span class="stat-label">総問題数:</span> <strong id="header-q-count">--</strong> 問</div>
-        <div class="stat-pill"><span class="stat-label">重要用語:</span> <strong id="header-t-count">--</strong> 語</div>
-        <div class="stat-pill port-pill"><span class="pulse-dot"></span> <span id="header-port">稼働中</span></div>
-      </div>
-    </div>
-    <!-- タブナビゲーション -->
-    <nav class="app-nav">
-      <button class="nav-tab active" data-tab="exam-tab">
-        <span class="icon">⏱️</span>
-        <span class="tab-label-full">本番形式 模擬試験</span>
-        <span class="tab-label-short">模試</span>
-      </button>
-      <button class="nav-tab" data-tab="drill-tab">
-        <span class="icon">📚</span>
-        <span class="tab-label-full">分野別ドリル</span>
-        <span class="tab-label-short">ドリル</span>
-      </button>
-      <button class="nav-tab" data-tab="audio-flow-tab">
-        <span class="icon">🎧</span>
-        <span class="tab-label-full">各章 聞き流し</span>
-        <span class="tab-label-short">聞き流し</span>
-      </button>
-      <button class="nav-tab" data-tab="terms-tab">
-        <span class="icon">📖</span>
-        <span class="tab-label-full">重要用語集</span>
-        <span class="tab-label-short">用語集</span>
-      </button>
-      <button class="nav-tab" data-tab="admin-tab">
-        <span class="icon">✍️</span>
-        <span class="tab-label-full">問題の手動登録・管理</span>
-        <span class="tab-label-short">管理</span>
-      </button>
-    </nav>
-  </header>
-
-  <!-- 音声コントロールバー（常設フローティング） -->
-  <aside id="audio-control-bar" class="audio-bar hidden">
-    <div class="audio-bar-inner">
-      <div class="audio-info">
-        <span class="audio-icon pulse-speaker">🔊</span>
-        <span id="audio-reading-title">音声解説を再生中...</span>
-      </div>
-      <div class="audio-controls">
-        <button id="btn-audio-play-pause" class="btn-audio-action" title="一時停止 / 再開">⏸</button>
-        <button id="btn-audio-stop" class="btn-audio-action" title="停止">⏹</button>
-        <div class="audio-speed-wrapper">
-          <label for="audio-speed-select">速度:</label>
-          <select id="audio-speed-select" class="audio-speed-select">
-            <option value="0.85">0.85x</option>
-            <option value="1.0" selected>1.0x</option>
-            <option value="1.25">1.25x</option>
-            <option value="1.5">1.5x</option>
-            <option value="1.75">1.75x</option>
-            <option value="2.0">2.0x</option>
-          </select>
-        </div>
-      </div>
-    </div>
-  </aside>
-
-  <!-- メインコンテンツ -->
-  <main class="app-main">
-
-    <!-- 1. 模擬試験タブ -->
-    <section id="exam-tab" class="tab-pane active">
-      <!-- 模試スタート前設定 -->
-      <div id="exam-start-view" class="card hero-card">
-        <div class="card-header">
-          <h2>模擬試験モード</h2>
-          <p class="subtitle">本番同様のランダム出題、タイマー、見直しフラグ、音声解説機能で実力を測定します。</p>
-        </div>
-        <div class="card-body">
-          <div class="exam-settings">
-            <div class="setting-group">
-              <label for="exam-count-select">出題問題数</label>
-              <select id="exam-count-select" class="form-control">
-                <option value="200" selected>🎯 200 問（本番完全模試 - 120分 / 1問40秒ペース）</option>
-                <option value="100">50% 100 問（ハーフ模試 - 約66分）</option>
-                <option value="50">⚡ 50 問（集中模試 - 約33分）</option>
-                <option value="30">📝 30 問（標準模試 - 20分）</option>
-                <option value="10">☕ 10 問（クイック模試 - 約6分）</option>
-                <option value="all">📚 全問題（200問以上すべて）</option>
-              </select>
-            </div>
-            <div class="setting-group">
-              <label for="exam-timer-toggle">制限時間モード</label>
-              <select id="exam-timer-toggle" class="form-control">
-                <option value="pace40" selected>⏱️ 1問あたり40秒ペース（本番推奨）</option>
-                <option value="official120">🏁 本番120分固定（200問用）</option>
-                <option value="0">🍵 時間無制限（じっくり解く）</option>
-              </select>
-            </div>
+<body :class="[themeClass, fontSizeClass]" class="bg-slate-950 text-slate-100 min-h-screen font-sans antialiased flex flex-col selection:bg-sky-500 selection:text-white transition-colors">
+  <div id="app" v-cloak class="flex-1 flex flex-col max-w-6xl w-full mx-auto p-3 md:p-6">
+    
+    <!-- 🏗️ アプリヘッダー -->
+    <header class="border-b border-slate-800/80 pb-4 mb-5 flex flex-col gap-3">
+      <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+        <div>
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="bg-gradient-to-r from-sky-400 to-indigo-500 text-slate-950 font-bold px-2 py-0.5 rounded text-xs tracking-wider">G検定対策</span>
+            <h1 class="text-xl md:text-2xl font-bold text-white tracking-tight">G検定 絶対合格プログラム</h1>
+            <span class="text-xs bg-slate-800 text-sky-400 border border-slate-700 px-2.5 py-0.5 rounded-full font-mono">
+              v3.0.0 最新版 ({{ totalQuestionsCount }}問)
+            </span>
+            <span class="text-[11px] bg-emerald-950/80 text-emerald-300 border border-emerald-700/60 px-2 py-0.5 rounded-full flex items-center gap-1 font-medium">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>オフライン対応済
+            </span>
           </div>
-          <div class="action-buttons">
-            <button id="btn-start-exam" class="btn btn-primary btn-lg">模擬試験を開始する</button>
+          <p class="text-xs text-slate-400 mt-1">脳科学的ステージ制 × 音声聞き流し × 数値フラッシュ暗記 × 150問本番模試</p>
+        </div>
+
+        <!-- アクションツールバー -->
+        <div class="flex items-center gap-2 flex-wrap">
+          <!-- 文字サイズ切り替え -->
+          <div class="flex items-center bg-slate-900 border border-slate-800 rounded-lg p-0.5 text-xs">
+            <span class="text-slate-400 px-1.5 text-[11px]">文字:</span>
+            <button @click="setFontSize('font-size-standard')" :class="fontSizeClass === 'font-size-standard' ? 'bg-sky-600 text-white font-bold' : 'text-slate-400 hover:text-white'" class="px-2 py-0.5 rounded">標準</button>
+            <button @click="setFontSize('font-size-large')" :class="fontSizeClass === 'font-size-large' ? 'bg-sky-600 text-white font-bold' : 'text-slate-400 hover:text-white'" class="px-2 py-0.5 rounded">大</button>
+            <button @click="setFontSize('font-size-xlarge')" :class="fontSizeClass === 'font-size-xlarge' ? 'bg-sky-600 text-white font-bold' : 'text-slate-400 hover:text-white'" class="px-2 py-0.5 rounded">特大</button>
           </div>
+
+          <!-- 常時点灯（スリープ防止 WakeLock） -->
+          <button @click="toggleWakeLock" :class="isWakeLockActive ? 'bg-amber-500/20 text-amber-300 border-amber-500' : 'bg-slate-900 text-slate-400 border-slate-800'" class="px-2.5 py-1 rounded-lg border text-xs flex items-center gap-1 transition-all" title="スマホ画面の自動スリープを防止">
+            <span>🔆</span>
+            <span>常時点灯: {{ isWakeLockActive ? 'ON' : 'OFF' }}</span>
+          </button>
+
+          <!-- 試験カウントダウン -->
+          <div class="flex items-center gap-1 bg-indigo-950/70 border border-indigo-700/60 px-3 py-1 rounded-lg text-xs font-semibold text-indigo-200">
+            <span>📅 試験まで</span>
+            <span class="text-sky-400 font-bold font-mono text-sm">{{ countdownDays }}</span>日
+          </div>
+
+          <!-- テーマ切り替え -->
+          <button @click="toggleTheme" class="bg-slate-900 hover:bg-slate-800 border border-slate-800 p-1.5 rounded-lg text-xs text-slate-300" title="テーマ切り替え">
+            <span>{{ themeClass === 'theme-dark' ? '🌙' : '☀️' }}</span>
+          </button>
         </div>
       </div>
 
-      <!-- 模試解答中ビュー -->
-      <div id="exam-play-view" class="hidden">
-        <div class="exam-top-bar">
-          <div class="exam-bar-row-main">
-            <div class="progress-info">
-              <span id="exam-q-progress">第 1 問 / 200 問</span>
-              <span class="category-badge" id="exam-current-category">分野名</span>
-            </div>
-            <div class="exam-controls-top">
-              <button id="btn-speak-exam-q" class="btn btn-outline btn-sm" title="問題文と選択肢を音声で読み上げ">
-                🔊 <span class="btn-text">読み上げ</span>
-              </button>
-              <button id="btn-flag-toggle" class="btn btn-outline btn-sm" title="見直しチェック">
-                <span id="flag-icon">🚩</span> <span class="btn-text">見直し</span>
-              </button>
-              <button id="btn-finish-exam" class="btn btn-danger btn-sm">採点・終了</button>
-              <button id="btn-abort-exam" class="btn btn-outline btn-sm" title="中断して戻る">✕ 中断</button>
-            </div>
-          </div>
-          <div class="exam-bar-row-timers timer-flex-group">
-            <!-- 1問40秒ペースタイマー -->
-            <div class="per-question-timer-box" id="per-question-timer-box">
-              <div class="pace-label-row">
-                <span class="pace-title">40秒ペース:</span>
-                <strong id="pace-seconds-text">40秒</strong>
-              </div>
-              <div class="pace-progress-track">
-                <div id="pace-progress-bar" class="pace-progress-fill"></div>
-              </div>
-            </div>
-            <!-- 全体残り時間 -->
-            <div class="timer-box" id="exam-timer-box">
-              <span class="timer-icon">⏳</span>
-              <div class="total-timer-col">
-                <span class="total-timer-label">残り時間</span>
-                <span id="exam-timer-text">02:00:00</span>
-              </div>
-            </div>
-          </div>
-        </div>
+      <!-- 🧭 メインナビゲーションタブ -->
+      <nav class="flex items-center gap-1 overflow-x-auto py-1 scrollbar-none text-xs md:text-sm">
+        <button 
+          v-for="tab in navTabs" :key="tab.id"
+          @click="switchTab(tab.id)"
+          :class="activeTab === tab.id ? 'bg-sky-600 text-white font-bold shadow' : 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800/80'"
+          class="px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 shrink-0">
+          <span>{{ tab.icon }}</span>
+          <span>{{ tab.name }}</span>
+        </button>
+      </nav>
+    </header>
 
-        <div class="exam-layout">
-          <!-- 問題カード -->
-          <div class="card question-card">
-            <div class="question-header">
-              <h3 id="exam-question-text" class="question-title">問題文がここに表示されます</h3>
-            </div>
-            <div class="choices-list" id="exam-choices-container">
-              <!-- 選択肢が動的に挿入されます -->
-            </div>
-            <div class="question-nav-buttons">
-              <button id="btn-exam-prev" class="btn btn-secondary btn-nav-action">◀ 前の問題</button>
-              <button id="btn-exam-next" class="btn btn-primary btn-nav-action">次の問題 ▶</button>
-            </div>
-          </div>
+    <!-- メインコンテンツ領域 -->
+    <main class="flex-1 flex flex-col">
 
-          <!-- 右側問題ナビゲーションパレット -->
-          <div class="card nav-palette-card">
-            <div class="palette-header-toggle" id="btn-toggle-palette" role="button" tabindex="0">
-              <div class="palette-title-group">
-                <span class="palette-icon">🔢</span>
-                <h4>問題パレット (<span id="palette-count-label">200問</span>)</h4>
-              </div>
-              <div class="palette-toggle-state">
-                <span class="palette-summary-badge" id="palette-answered-count">0/200回答</span>
-                <span class="palette-chevron" id="palette-chevron">▼</span>
-              </div>
-            </div>
-            <div class="palette-collapsible-body" id="palette-collapsible-content">
-              <div class="palette-legend">
-                <span><span class="dot dot-unanswered"></span> 未回答</span>
-                <span><span class="dot dot-answered"></span> 解答済</span>
-                <span><span class="dot dot-flagged"></span> 要見直し</span>
-              </div>
-              <div class="palette-grid" id="exam-palette-grid">
-                <!-- 1, 2, 3... ボタン -->
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- 模試結果ビュー -->
-      <div id="exam-result-view" class="hidden">
-        <div class="card result-card">
-          <div class="result-header">
-            <div class="score-circle" id="score-circle">
-              <span class="score-number" id="result-score-percent">0%</span>
-              <span class="score-sub" id="result-score-fraction">0 / 0</span>
-            </div>
-            <div class="result-evaluation">
-              <h2 id="result-verdict">判定中</h2>
-              <p id="result-feedback">評価コメントがここに入ります</p>
-              <div class="result-meta">
-                <span>所要時間: <strong id="result-time-taken">0分0秒</strong></span>
-                <span>正解: <strong id="result-correct-count">0</strong>問 / 不正解: <strong id="result-wrong-count">0</strong>問</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- 分野別 得点率・出題配分分析 (分散バランス分析) -->
-          <div class="result-category-breakdown" id="result-category-breakdown">
-            <h4 class="category-breakdown-title">📊 分野別の出題配分と正答率分析（シラバス分散）</h4>
-            <div class="category-breakdown-list" id="category-breakdown-list">
-              <!-- 動的生成: 各分野の出題数、正解数、正答率プログレスバー、合否判定バッジ -->
-            </div>
-          </div>
-
-          <div class="action-buttons result-actions">
-            <button id="btn-exam-restart" class="btn btn-primary">もう一度受験する</button>
-            <button id="btn-filter-mistakes" class="btn btn-secondary">間違えた問題のみ表示</button>
-            <button id="btn-show-all-reviews" class="btn btn-outline">全問の解説を見る</button>
-          </div>
-        </div>
-
-        <!-- 全問詳細解説アコーディオンリスト -->
-        <div class="card review-list-card">
-          <div class="review-header-flex">
+      <!-- ============================================== -->
+      <!-- TAB 1: 📊 ダッシュボード (ロードマップ・進捗) -->
+      <!-- ============================================== -->
+      <section v-if="activeTab === 'dashboard'" class="space-y-6">
+        
+        <!-- ヒーロースタッツ -->
+        <div class="bg-gradient-to-br from-slate-900 via-slate-900 to-indigo-950/30 border border-slate-800 rounded-2xl p-5 shadow-xl">
+          <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-5">
             <div>
-              <h3>全問解答・選択肢別詳細解説</h3>
-              <p class="subtitle">解説内の青字キーワードをクリックすると、用語集の解説がその場でポップアップ表示されます。</p>
+              <h2 class="text-lg md:text-xl font-bold text-white mb-1">G検定 一発合格ロードマップ</h2>
+              <p class="text-xs text-slate-400">実務者のアドバンテージを活かし、1問40秒の即答力と「引っ掛け罠」の完全見極めで合格ライン75%以上を確実に突破します。</p>
             </div>
-            <button id="btn-speak-all-explanations" class="btn btn-outline btn-sm">
-              🔊 間違えた問題の解説をまとめて連続再生
+            <div class="text-xs bg-slate-950/80 border border-slate-800 px-3 py-1.5 rounded-xl text-slate-300 font-mono">
+              試験日程: 2026年11月6日(金)・7日(土)
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div class="bg-slate-950 p-3.5 rounded-xl border border-slate-800/80">
+              <span class="text-[11px] text-slate-400 block mb-1">ステージ クリア進捗</span>
+              <div class="text-xl md:text-2xl font-bold text-sky-400 font-mono">{{ clearedStagesCount }} / 18</div>
+              <div class="h-1.5 bg-slate-800 rounded-full mt-2 overflow-hidden">
+                <div class="h-full bg-sky-500 rounded-full" :style="{ width: (clearedStagesCount / 18 * 100) + '%' }"></div>
+              </div>
+            </div>
+
+            <div class="bg-slate-950 p-3.5 rounded-xl border border-slate-800/80">
+              <span class="text-[11px] text-slate-400 block mb-1">獲得スター ⭐</span>
+              <div class="text-xl md:text-2xl font-bold text-amber-400 font-mono">⭐ {{ totalStarsEarned }} / 54</div>
+              <span class="text-[10px] text-slate-500 block mt-1">基準: 80%以上正解</span>
+            </div>
+
+            <div class="bg-slate-950 p-3.5 rounded-xl border border-slate-800/80">
+              <span class="text-[11px] text-slate-400 block mb-1">重要数値・暗記習得</span>
+              <div class="text-xl md:text-2xl font-bold text-emerald-400 font-mono">{{ masteredCardsCount }} / {{ flashcards.length }}</div>
+              <div class="h-1.5 bg-slate-800 rounded-full mt-2 overflow-hidden">
+                <div class="h-full bg-emerald-500 rounded-full" :style="{ width: (masteredCardsCount / flashcards.length * 100) + '%' }"></div>
+              </div>
+            </div>
+
+            <div class="bg-slate-950 p-3.5 rounded-xl border border-slate-800/80">
+              <span class="text-[11px] text-slate-400 block mb-1">要復習（マーク問題）</span>
+              <div class="text-xl md:text-2xl font-bold text-rose-400 font-mono">{{ bookmarkedQuestionsCount }} 問</div>
+              <span class="text-[10px] text-slate-500 block mt-1">弱点集中ノック対象</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 今日の推奨トレーニング（クイックメニュー） -->
+        <div>
+          <h3 class="text-sm font-bold text-slate-200 mb-3 flex items-center gap-1.5">
+            <span>⚡</span> 今日の推奨トレーニング
+          </h3>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+            
+            <div @click="switchTab('stages')" class="bg-slate-900 border border-slate-800 hover:border-sky-500 rounded-xl p-4 transition-all cursor-pointer flex flex-col justify-between group">
+              <div>
+                <div class="flex items-center gap-2 mb-2">
+                  <span class="text-2xl">🎯</span>
+                  <div>
+                    <h4 class="text-xs font-bold text-white group-hover:text-sky-400 transition-colors">脳科学的 段階ステップアップ</h4>
+                    <span class="text-[10px] text-slate-400">10問クリアで次が解放 / 全18ステージ</span>
+                  </div>
+                </div>
+                <p class="text-[11px] text-slate-400 leading-relaxed mb-3">
+                  前ステージの間違いを自動リレーション復習。忘却曲線を克服して大脳皮質へ定着。
+                </p>
+              </div>
+              <button class="bg-sky-600 hover:bg-sky-500 text-white text-xs py-1.5 px-3 rounded-lg font-semibold w-full text-center">
+                ステージに挑戦 →
+              </button>
+            </div>
+
+            <div @click="switchTab('audio')" class="bg-slate-900 border border-slate-800 hover:border-indigo-500 rounded-xl p-4 transition-all cursor-pointer flex flex-col justify-between group">
+              <div>
+                <div class="flex items-center gap-2 mb-2">
+                  <span class="text-2xl">🎧</span>
+                  <div>
+                    <h4 class="text-xs font-bold text-white group-hover:text-indigo-400 transition-colors">全自動！音声聞き流し学習</h4>
+                    <span class="text-[10px] text-slate-400">通勤・移動・就寝前 / ループ再生</span>
+                  </div>
+                </div>
+                <p class="text-[11px] text-slate-400 leading-relaxed mb-3">
+                  耳だけで「問題 ➔ 3秒ポーズ ➔ 正解・引っ掛け罠」を全自動ループ朗読。
+                </p>
+              </div>
+              <button class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs py-1.5 px-3 rounded-lg font-semibold w-full text-center">
+                聞き流す →
+              </button>
+            </div>
+
+            <div @click="switchTab('flashcards')" class="bg-slate-900 border border-slate-800 hover:border-emerald-500 rounded-xl p-4 transition-all cursor-pointer flex flex-col justify-between group">
+              <div>
+                <div class="flex items-center gap-2 mb-2">
+                  <span class="text-2xl">🔢</span>
+                  <div>
+                    <h4 class="text-xs font-bold text-white group-hover:text-emerald-400 transition-colors">超頻出！重要数値・判定基準</h4>
+                    <span class="text-[10px] text-slate-400">フラッシュ暗記カード</span>
+                  </div>
+                </div>
+                <p class="text-[11px] text-slate-400 leading-relaxed mb-3">
+                  AlexNet/ResNet誤り率、著作権30条の4、Sigmoid導関数最大値0.25を瞬時暗記。
+                </p>
+              </div>
+              <button class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs py-1.5 px-3 rounded-lg font-semibold w-full text-center">
+                暗記カードを開く →
+              </button>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- 黒本・分野別 学習達成率 -->
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+          <h3 class="text-sm font-bold text-slate-200 mb-3 flex items-center gap-1.5">
+            <span>📚</span> 黒本・章別 学習達成率
+          </h3>
+
+          <div class="space-y-3">
+            <div v-for="ch in chapters" :key="ch.id" class="border-b border-slate-800/80 pb-2.5 last:border-none">
+              <div class="flex justify-between items-center text-xs mb-1">
+                <span class="font-medium text-slate-300">{{ ch.name }}</span>
+                <span class="text-slate-400 font-mono">{{ getChapterTotal(ch.id) }}問 収録</span>
+              </div>
+              <div class="h-1.5 bg-slate-950 rounded-full overflow-hidden flex">
+                <div class="h-full bg-sky-500" :style="{ width: getChapterProgressPercent(ch.id) + '%' }"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+
+      <!-- ============================================== -->
+      <!-- TAB 2: 🎯 段階ステップアップ特訓 (全18ステージ) -->
+      <!-- ============================================== -->
+      <section v-if="activeTab === 'stages'" class="space-y-4">
+        
+        <!-- ステージヘッダー -->
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 md:p-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div>
+            <div class="flex items-center gap-2 mb-1">
+              <span class="bg-indigo-950 text-indigo-300 border border-indigo-800 text-[11px] px-2.5 py-0.5 rounded-full font-bold">🧠 脳科学的学習メソッド</span>
+              <h2 class="text-base md:text-lg font-bold text-white">段階ステップアップ特訓（全18ステージ）</h2>
+            </div>
+            <p class="text-xs text-slate-400">1ステージ10問を80%以上（8問以上）正解すると次がアンロック！前のミスが自動リレーションされます。</p>
+          </div>
+
+          <div class="flex items-center gap-3">
+            <label class="flex items-center gap-1.5 text-xs text-slate-300 cursor-pointer bg-slate-950 border border-slate-800 px-3 py-1.5 rounded-xl">
+              <input type="checkbox" v-model="stageRelationReview" class="rounded bg-slate-900 border-slate-700 text-sky-500 focus:ring-0">
+              <span>🔁 前の間違いをリレーション復習</span>
+            </label>
+            <button @click="resetStagesProgress" class="text-xs text-slate-500 hover:text-slate-300 underline">進捗リセット</button>
+          </div>
+        </div>
+
+        <!-- 18ステージ グリッド -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+          <div 
+            v-for="(st, idx) in stagesList" 
+            :key="st.id"
+            @click="openStage(idx)"
+            :class="[
+              st.unlocked ? 'bg-slate-900 border-slate-800 hover:border-sky-500 cursor-pointer shadow' : 'bg-slate-950/60 border-slate-900 opacity-50 cursor-not-allowed',
+              st.cleared ? 'border-emerald-600/50 bg-gradient-to-br from-slate-900 to-emerald-950/20' : ''
+            ]"
+            class="border rounded-2xl p-4 transition-all flex flex-col justify-between relative group">
+            
+            <div>
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-xs font-mono font-bold px-2 py-0.5 rounded"
+                      :class="st.cleared ? 'bg-emerald-950 text-emerald-300 border border-emerald-800' : 'bg-slate-800 text-slate-300'">
+                  STAGE {{ idx + 1 < 10 ? '0' + (idx + 1) : idx + 1 }}
+                </span>
+                
+                <div class="text-xs">
+                  <span v-if="st.cleared" class="text-amber-400 font-bold">{{ '⭐'.repeat(st.stars) }}</span>
+                  <span v-else-if="!st.unlocked" class="text-slate-500">🔒 ロック中</span>
+                  <span v-else class="text-sky-400 font-medium text-[11px]">挑戦可能</span>
+                </div>
+              </div>
+
+              <h4 class="text-xs font-bold text-white group-hover:text-sky-400 transition-colors mb-1">
+                {{ st.title }}
+              </h4>
+              <p class="text-[11px] text-slate-400 line-clamp-2">
+                {{ st.desc }}
+              </p>
+            </div>
+
+            <div class="mt-4 pt-2 border-t border-slate-800/80 flex items-center justify-between text-[11px]">
+              <span class="text-slate-500">10問 / 8問以上合格</span>
+              <span v-if="st.bestScore !== null" class="font-mono font-bold" :class="st.bestScore >= 8 ? 'text-emerald-400' : 'text-amber-400'">
+                最高: {{ st.bestScore }}/10
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 🎯 ステージ演習モーダル -->
+        <div v-if="isStagePlaying" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-3">
+          <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+            
+            <!-- モーダルヘッダー -->
+            <div class="p-4 border-b border-slate-800 flex items-center justify-between">
+              <div>
+                <span class="text-xs font-mono font-bold text-sky-400">STAGE {{ currentPlayingStageIdx + 1 }}</span>
+                <h3 class="text-sm font-bold text-white">{{ stagesList[currentPlayingStageIdx].title }}</h3>
+              </div>
+
+              <div class="flex items-center gap-2">
+                <!-- カンニングモード（👀） -->
+                <button 
+                  @click="toggleCheatMode"
+                  class="px-2.5 py-1 rounded-lg border text-xs font-bold flex items-center gap-1 transition-all"
+                  :class="isCheatModeOn ? 'bg-amber-500/20 text-amber-300 border-amber-500' : 'bg-slate-950 text-slate-400 border-slate-800'">
+                  <span>👀</span> <span>カンニング: {{ isCheatModeOn ? 'ON' : 'OFF' }}</span>
+                </button>
+
+                <!-- 閉じるボタン -->
+                <button @click="closeStageModal" class="text-slate-400 hover:text-white text-sm p-1">✕</button>
+              </div>
+            </div>
+
+            <!-- ステージ進捗バー -->
+            <div class="h-1 bg-slate-950">
+              <div class="h-full bg-sky-500 transition-all" :style="{ width: ((stagePlayQuestionIndex + 1) / stageQuestions.length * 100) + '%' }"></div>
+            </div>
+
+            <!-- 演習画面本体 -->
+            <div class="p-5 flex-1 overflow-y-auto space-y-4">
+              
+              <!-- カンニングバナー（ON時のみ） -->
+              <div v-if="isCheatModeOn" class="bg-amber-950/40 border border-amber-600/60 p-2.5 rounded-xl text-xs text-amber-200 flex items-center gap-2">
+                <span>👀</span>
+                <span>カンニングモード稼働中：正解選択肢を事前透視＆要点を表示しています</span>
+              </div>
+
+              <!-- 問題文 & 音声読み上げボタン -->
+              <div>
+                <div class="flex items-center justify-between text-xs text-slate-400 mb-2">
+                  <span>設問 {{ stagePlayQuestionIndex + 1 }} / {{ stageQuestions.length }}</span>
+                  <button @click="speakText(currentStageQuestion.question)" class="text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1">
+                    <span>🔊</span> <span>問題を聴く</span>
+                  </button>
+                </div>
+                <h3 class="text-sm md:text-base font-medium text-slate-100 leading-relaxed whitespace-pre-wrap">
+                  {{ currentStageQuestion.question }}
+                </h3>
+              </div>
+
+              <!-- 選択肢 1〜4 -->
+              <div class="space-y-2.5">
+                <button 
+                  v-for="(option, idx) in currentStageQuestion.options" 
+                  :key="idx"
+                  @click="handleStageOptionClick(idx)"
+                  :disabled="stageAnswered"
+                  class="w-full text-left p-3 rounded-xl border text-xs md:text-sm transition-all flex items-start gap-3"
+                  :class="getStageOptionClass(idx)">
+                  <div class="w-5 h-5 rounded flex items-center justify-center text-xs font-bold shrink-0 border"
+                       :class="getStageBadgeClass(idx)">
+                    {{ idx + 1 }}
+                  </div>
+                  <span class="flex-1 leading-relaxed">{{ option }}</span>
+                </button>
+              </div>
+
+              <!-- 解答後解説 -->
+              <div v-if="stageAnswered" class="space-y-3 pt-3 border-t border-slate-800">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-bold" :class="stageSelectedOption === currentStageQuestion.correctIndex ? 'text-emerald-400' : 'text-rose-400'">
+                    {{ stageSelectedOption === currentStageQuestion.correctIndex ? '🎉 正解！' : '💥 不正解' }}
+                    （正解: 選択肢 {{ currentStageQuestion.correctIndex + 1 }}）
+                  </span>
+                  <button @click="speakText(currentStageQuestion.explanation + '。引っ掛けポイント：' + currentStageQuestion.trapNote)" class="text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1">
+                    <span>🔊</span> <span>解説を聴く</span>
+                  </button>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                  <div class="bg-slate-950 p-3 rounded-xl border border-emerald-600/40">
+                    <strong class="text-emerald-400 block mb-1">🟢 正解の論理:</strong>
+                    <p class="text-slate-200">{{ currentStageQuestion.explanation }}</p>
+                  </div>
+                  <div class="bg-slate-950 p-3 rounded-xl border border-amber-600/40">
+                    <strong class="text-amber-400 block mb-1">🚨 ここが引っ掛け罠:</strong>
+                    <p class="text-amber-200/90 whitespace-pre-wrap">{{ currentStageQuestion.trapNote }}</p>
+                  </div>
+                </div>
+
+                <div class="flex justify-end pt-2">
+                  <button @click="nextStageQuestion" class="bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs px-5 py-2.5 rounded-xl shadow">
+                    {{ stagePlayQuestionIndex < stageQuestions.length - 1 ? '次の設問へ進む →' : 'ステージ結果を見る ➔' }}
+                  </button>
+                </div>
+              </div>
+
+            </div>
+
+            <!-- ステージ結果画面 -->
+            <div v-if="isStageFinished" class="absolute inset-0 bg-slate-900 p-6 flex flex-col justify-center items-center text-center space-y-4">
+              <span class="text-4xl">{{ stageCurrentScore >= 8 ? '🎉' : '💪' }}</span>
+              <h3 class="text-xl font-bold text-white">
+                {{ stageCurrentScore >= 8 ? 'STAGE CLEAR 達成！' : 'あと少し！再挑戦しましょう' }}
+              </h3>
+              
+              <div class="text-amber-400 text-xl font-bold">
+                {{ '⭐'.repeat(calculateStars(stageCurrentScore)) }}
+              </div>
+
+              <div class="text-3xl font-extrabold font-mono" :class="stageCurrentScore >= 8 ? 'text-emerald-400' : 'text-amber-400'">
+                {{ stageCurrentScore }} <span class="text-base text-slate-400">/ 10問正解</span>
+              </div>
+
+              <p class="text-xs text-slate-400 max-w-sm">
+                {{ stageCurrentScore >= 8 ? '80%以上の基準を突破しました！次のステージがアンロックされました。' : '8問以上正解で次のステージがアンロックされます。もう一度挑戦してみましょう！' }}
+              </p>
+
+              <div class="flex items-center gap-3 pt-3">
+                <button @click="retryCurrentStage" class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs px-4 py-2 rounded-xl border border-slate-700">
+                  もう一度挑戦する
+                </button>
+                <button v-if="stageCurrentScore >= 8 && currentPlayingStageIdx < 17" @click="proceedNextStage" class="bg-sky-600 hover:bg-sky-500 text-white text-xs px-5 py-2 rounded-xl font-bold shadow">
+                  次のステージへ進む →
+                </button>
+                <button @click="closeStageModal" class="bg-slate-800 text-slate-400 text-xs px-4 py-2 rounded-xl">
+                  ステージ一覧へ戻る
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+      </section>
+
+
+      <!-- ============================================== -->
+      <!-- TAB 3: ⏱️ 実戦模試（10分 / 20分 / 100分） -->
+      <!-- ============================================== -->
+      <section v-if="activeTab === 'exam'" class="flex-1 flex flex-col gap-4">
+        
+        <!-- モード選択・開始前画面 -->
+        <div v-if="!isExamStarted && !isExamFinished" class="flex-1 flex flex-col justify-center max-w-4xl mx-auto my-auto w-full py-4">
+          <div class="text-center mb-6">
+            <h2 class="text-xl md:text-2xl font-bold text-white mb-2">実戦シミュレーション・学習モード選択</h2>
+            <p class="text-xs md:text-sm text-slate-400">日常のスキマ時間や学習フェーズに合わせて、最適なモードを選択してください。</p>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            
+            <!-- ⚡ 10分版 -->
+            <div class="bg-slate-900 border border-slate-800 hover:border-sky-500 rounded-2xl p-5 flex flex-col justify-between transition-all shadow-lg">
+              <div>
+                <div class="flex items-center justify-between mb-3">
+                  <span class="text-2xl">⚡</span>
+                  <span class="text-[11px] font-mono bg-sky-950 text-sky-300 border border-sky-800 px-2 py-0.5 rounded-full">10分 / 15問</span>
+                </div>
+                <h3 class="text-base font-bold text-white mb-1">タイムリー10分版</h3>
+                <p class="text-xs text-slate-400 leading-relaxed mb-4">
+                  朝の始業前や移動中のスキマ時間に。本番ペース（1問40秒）の感覚を磨くクイック演習です。
+                </p>
+                <div class="space-y-1 text-[11px] text-slate-300 border-t border-slate-800 pt-3">
+                  <div class="flex justify-between"><span>問題数:</span><strong class="text-sky-400">15問</strong></div>
+                  <div class="flex justify-between"><span>制限時間:</span><strong>10分 (600秒)</strong></div>
+                  <div class="flex justify-between"><span>スタイル:</span><span>終了後にまとめて採点</span></div>
+                </div>
+              </div>
+              <button @click="startSpecificExam('speed10')" class="mt-5 w-full bg-sky-600 hover:bg-sky-500 text-white font-bold py-2.5 rounded-xl text-xs transition-all shadow">
+                ⚡ 10分版を開始
+              </button>
+            </div>
+
+            <!-- 🧠 20分版 -->
+            <div class="bg-slate-900 border border-slate-800 hover:border-emerald-500 rounded-2xl p-5 flex flex-col justify-between transition-all shadow-lg bg-gradient-to-br from-slate-900 to-emerald-950/20">
+              <div>
+                <div class="flex items-center justify-between mb-3">
+                  <span class="text-2xl">🧠</span>
+                  <span class="text-[11px] font-mono bg-emerald-950 text-emerald-300 border border-emerald-800 px-2 py-0.5 rounded-full font-bold">20分 / 25問 [解説付]</span>
+                </div>
+                <h3 class="text-base font-bold text-emerald-300 mb-1">濃縮20分版（即時解説）</h3>
+                <p class="text-xs text-slate-400 leading-relaxed mb-4">
+                  1問解くごとにその場で<strong>「正解論理」と「引っ掛け罠」を即座に確認</strong>できる高密度インプット特訓！
+                </p>
+                <div class="space-y-1 text-[11px] text-slate-300 border-t border-slate-800 pt-3">
+                  <div class="flex justify-between"><span>問題数:</span><strong class="text-emerald-400">25問</strong></div>
+                  <div class="flex justify-between"><span>制限時間:</span><strong>20分 (1,200秒)</strong></div>
+                  <div class="flex justify-between"><span>スタイル:</span><strong class="text-emerald-300">1問ごとに即時解説表示</strong></div>
+                </div>
+              </div>
+              <button @click="startSpecificExam('intensive20')" class="mt-5 w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 rounded-xl text-xs transition-all shadow">
+                🧠 濃縮20分版を開始
+              </button>
+            </div>
+
+            <!-- 🏆 100分版 -->
+            <div class="bg-slate-900 border border-slate-800 hover:border-indigo-500 rounded-2xl p-5 flex flex-col justify-between transition-all shadow-lg">
+              <div>
+                <div class="flex items-center justify-between mb-3">
+                  <span class="text-2xl">🏆</span>
+                  <span class="text-[11px] font-mono bg-indigo-950 text-indigo-300 border border-indigo-800 px-2 py-0.5 rounded-full">100分 / 150問</span>
+                </div>
+                <h3 class="text-base font-bold text-white mb-1">本番フル模試</h3>
+                <p class="text-xs text-slate-400 leading-relaxed mb-4">
+                  G検定の本番比率（全分野）に完全準拠。100分の集中力と145〜150問の実戦体力を測定します。
+                </p>
+                <div class="space-y-1 text-[11px] text-slate-300 border-t border-slate-800 pt-3">
+                  <div class="flex justify-between"><span>問題数:</span><strong class="text-indigo-400">150問</strong></div>
+                  <div class="flex justify-between"><span>制限時間:</span><strong>100分 (6,000秒)</strong></div>
+                  <div class="flex justify-between"><span>スタイル:</span><span>終了後に総合採点＆弱点分析</span></div>
+                </div>
+              </div>
+              <button @click="startSpecificExam('full100')" class="mt-5 w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2.5 rounded-xl text-xs transition-all shadow">
+                🏆 本番模試を開始
+              </button>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- テスト実施中画面 -->
+        <div v-else-if="isExamStarted && !isExamFinished" class="flex-1 flex flex-col md:flex-row gap-5">
+          <div class="flex-1 flex flex-col bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl relative">
+            
+            <div class="flex items-center justify-between pb-3 mb-4 border-b border-slate-800">
+              <div class="flex items-center gap-2">
+                <span class="text-xs font-bold text-sky-400">第 {{ currentExamIndex + 1 }} 問</span>
+                <span class="text-xs bg-slate-800 text-slate-300 px-2 py-0.5 rounded">{{ currentExamQuestion.chapterName || currentExamQuestion.category }}</span>
+                <span class="text-xs text-slate-500 font-mono">({{ currentExamIndex + 1 }}/{{ examQuestions.length }})</span>
+                <span v-if="selectedExamMode === 'intensive20'" class="text-[11px] bg-emerald-950 text-emerald-400 border border-emerald-800 px-2 py-0.5 rounded font-semibold">濃縮解説モード</span>
+              </div>
+
+              <div class="flex items-center gap-3">
+                <div class="flex items-center gap-1.5 px-3 py-1 rounded-xl border text-xs font-mono font-bold"
+                     :class="examTimeRemaining <= 180 ? 'bg-rose-950/80 text-rose-300 border-rose-600 animate-pulse' : 'bg-slate-950 text-amber-300 border-slate-700'">
+                  <span>⏱️ 残り</span>
+                  <span>{{ formatExamTime(examTimeRemaining) }}</span>
+                </div>
+
+                <button 
+                  @click="toggleExamMark(currentExamIndex)"
+                  class="px-2.5 py-1 rounded-lg border text-xs flex items-center gap-1 transition-all"
+                  :class="examMarks[currentExamIndex] ? 'bg-amber-500/20 text-amber-300 border-amber-500 font-bold' : 'bg-slate-950 text-slate-400 border-slate-800'">
+                  <span>{{ examMarks[currentExamIndex] ? '★ マーク中' : '☆ 見直す' }}</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="mb-5 flex-1">
+              <h2 class="text-base md:text-lg font-medium text-slate-100 leading-relaxed whitespace-pre-wrap select-text">
+                {{ currentExamQuestion.question }}
+              </h2>
+            </div>
+
+            <div class="space-y-3 mb-5">
+              <button 
+                v-for="(option, idx) in currentExamQuestion.options" 
+                :key="idx"
+                @click="selectExamAnswer(idx)"
+                :disabled="selectedExamMode === 'intensive20' && examUserAnswers[currentExamIndex] !== null"
+                class="w-full text-left p-3.5 rounded-xl border text-sm transition-all flex items-start gap-3"
+                :class="getExamOptionClass(idx)">
+                <div class="w-6 h-6 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 border"
+                     :class="getExamBadgeClass(idx)">
+                  {{ idx + 1 }}
+                </div>
+                <span class="leading-relaxed flex-1">{{ option }}</span>
+                
+                <template v-if="selectedExamMode === 'intensive20' && examUserAnswers[currentExamIndex] !== null">
+                  <span v-if="idx === currentExamQuestion.correctIndex" class="text-emerald-400 font-bold text-xs shrink-0 self-center">✓ 正解</span>
+                  <span v-else-if="examUserAnswers[currentExamIndex] === idx" class="text-rose-400 font-bold text-xs shrink-0 self-center">✕ 不正解</span>
+                </template>
+              </button>
+            </div>
+
+            <!-- 濃縮20分版 即時解説カード -->
+            <div v-if="selectedExamMode === 'intensive20' && examUserAnswers[currentExamIndex] !== null" 
+                 class="space-y-3 pt-3 border-t border-slate-800 mb-4 animate-fade-in">
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div class="bg-slate-950 border border-emerald-600/40 rounded-xl p-3 text-xs">
+                  <h4 class="font-bold text-emerald-400 mb-1 flex items-center gap-1">🟢 正解の論理</h4>
+                  <p class="text-slate-200 leading-relaxed">{{ currentExamQuestion.explanation }}</p>
+                </div>
+                <div class="bg-slate-950 border border-amber-600/40 rounded-xl p-3 text-xs">
+                  <h4 class="font-bold text-amber-400 mb-1 flex items-center gap-1">🚨 ここが引っ掛け罠！</h4>
+                  <p class="text-amber-200/90 leading-relaxed whitespace-pre-wrap">{{ currentExamQuestion.trapNote }}</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="flex items-center justify-between pt-3 border-t border-slate-800">
+              <button 
+                @click="prevExamQuestion" 
+                :disabled="currentExamIndex === 0"
+                class="px-4 py-2 rounded-xl text-xs font-semibold border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed">
+                ◀ 前の問題
+              </button>
+
+              <div class="text-xs text-slate-400">
+                進捗: <strong class="text-emerald-400">{{ answeredExamCount }}</strong> / {{ examQuestions.length }} 問
+              </div>
+
+              <div class="flex items-center gap-2">
+                <button 
+                  v-if="currentExamIndex < examQuestions.length - 1"
+                  @click="nextExamQuestion" 
+                  class="px-5 py-2 rounded-xl text-xs font-semibold bg-sky-600 hover:bg-sky-500 text-white shadow">
+                  次の問題 ▶
+                </button>
+                <button 
+                  @click="finishExam" 
+                  class="px-4 py-2 rounded-xl text-xs font-semibold bg-rose-700 hover:bg-rose-600 text-white">
+                  テスト終了・採点
+                </button>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- 右側グリッド -->
+          <div class="w-full md:w-56 bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col max-h-[650px]">
+            <div class="flex items-center justify-between mb-2 text-xs font-bold text-slate-200">
+              <span>問題ナビ</span>
+              <span class="text-[10px] text-slate-400 font-normal">全 {{ examQuestions.length }} 問</span>
+            </div>
+
+            <div class="flex-1 overflow-y-auto grid grid-cols-4 gap-1.5 pr-1">
+              <button 
+                v-for="(q, idx) in examQuestions" 
+                :key="idx"
+                @click="currentExamIndex = idx"
+                class="h-7 text-[11px] font-mono rounded-lg border transition-all flex items-center justify-center font-semibold relative"
+                :class="getExamGridClass(idx)">
+                {{ idx + 1 }}
+                <span v-if="examMarks[idx]" class="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-amber-400"></span>
+              </button>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- 採点レポート -->
+        <div v-else-if="isExamFinished" class="flex-1 flex flex-col bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl">
+          <div class="text-center pb-6 border-b border-slate-800">
+            <span class="text-xs font-mono px-3 py-1 rounded-full border mb-2 inline-block bg-indigo-950 border-indigo-800 text-indigo-300">
+              {{ getExamModeTitle() }}
+            </span>
+            <h2 class="text-2xl font-bold text-white mb-2">採点結果レポート</h2>
+            
+            <div class="flex items-center justify-center gap-8 mt-4">
+              <div>
+                <span class="text-xs text-slate-400 block">総合スコア</span>
+                <span class="text-4xl font-extrabold" :class="examScoreRate >= 75 ? 'text-emerald-400' : 'text-amber-400'">
+                  {{ examScore }} <span class="text-lg font-normal text-slate-400">/ {{ examQuestions.length }}</span>
+                </span>
+              </div>
+              <div class="border-l border-slate-800 pl-8 text-left">
+                <span class="text-xs text-slate-400 block">正答率</span>
+                <span class="text-3xl font-bold" :class="examScoreRate >= 75 ? 'text-emerald-400' : 'text-rose-400'">
+                  {{ examScoreRate.toFixed(1) }}%
+                </span>
+                <span class="text-xs block mt-0.5" :class="examScoreRate >= 75 ? 'text-emerald-400' : 'text-rose-400'">
+                  {{ examScoreRate >= 75 ? '🎉 合格ライン（75%以上）クリア！' : '⚠️ 合格ラインまであと少し！' }}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div class="my-5">
+            <h3 class="text-xs font-bold text-slate-300 mb-3 uppercase tracking-wider">分野別 正答率</h3>
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+              <div v-for="(stat, cat) in examCategoryStats" :key="cat" class="bg-slate-950 p-3 rounded-xl border border-slate-800">
+                <div class="flex justify-between items-center text-xs mb-1">
+                  <span class="text-slate-300 truncate font-medium">{{ cat }}</span>
+                  <span class="font-mono font-bold" :class="stat.rate >= 75 ? 'text-emerald-400' : 'text-amber-400'">
+                    {{ stat.correct }}/{{ stat.total }} ({{ stat.rate.toFixed(0) }}%)
+                  </span>
+                </div>
+                <div class="h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                  <div class="h-full rounded-full" :class="stat.rate >= 75 ? 'bg-emerald-500' : 'bg-amber-500'" :style="{ width: stat.rate + '%' }"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="flex-1 border-t border-slate-800 pt-4">
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="text-xs font-bold text-rose-400 flex items-center gap-1.5">
+                <span>💥</span> 誤答・引っ掛け問題の復習 ({{ examWrongQuestions.length }}問)
+              </h3>
+              <button @click="resetExamState" class="text-xs bg-sky-600 hover:bg-sky-500 text-white px-4 py-2 rounded-xl">
+                モード選択に戻る
+              </button>
+            </div>
+
+            <div class="space-y-3 max-h-[450px] overflow-y-auto pr-2">
+              <div v-for="item in examWrongQuestions" :key="item.q.id" class="bg-slate-950 p-3.5 rounded-xl border border-slate-800 text-xs">
+                <div class="flex items-center justify-between mb-1.5">
+                  <span class="bg-slate-800 text-slate-300 px-2 py-0.5 rounded">{{ item.q.chapterName || item.q.category }}</span>
+                  <span class="text-rose-400 font-mono">回答: {{ item.userAnswer !== null ? item.userAnswer + 1 : '未' }} / 正解: {{ item.q.correctIndex + 1 }}</span>
+                </div>
+                <p class="font-semibold text-slate-200 mb-2">{{ item.q.question }}</p>
+                <div class="bg-amber-950/30 border border-amber-600/40 p-2.5 rounded-lg text-amber-200 mb-2 whitespace-pre-wrap">
+                  {{ item.q.trapNote }}
+                </div>
+                <p class="text-slate-400"><strong class="text-emerald-400">正解の根拠:</strong> {{ item.q.explanation }}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+
+      <!-- ============================================== -->
+      <!-- TAB 4: 📚 分野別特訓ドリル (未解答/誤答ノック) -->
+      <!-- ============================================== -->
+      <section v-if="activeTab === 'drill'" class="space-y-4">
+        
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3 text-xs md:text-sm">
+          <div class="flex items-center gap-2 flex-wrap">
+            <label class="text-slate-400">分野・章:</label>
+            <select v-model="drillChapter" class="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-slate-200 focus:outline-none focus:border-sky-500">
+              <option value="ALL">全分野から特訓 ({{ allQuestions.length }}問)</option>
+              <option v-for="ch in chapters" :key="ch.id" :value="ch.id">{{ ch.name }}</option>
+            </select>
+
+            <label class="flex items-center gap-1 text-slate-300 ml-2 cursor-pointer">
+              <input type="checkbox" v-model="drillOnlyWrong" class="rounded bg-slate-950 border-slate-700 text-rose-500 focus:ring-0">
+              <span>💥 過去の誤答問題のみ</span>
+            </label>
+
+            <label class="flex items-center gap-1 text-slate-300 ml-2 cursor-pointer">
+              <input type="checkbox" v-model="drillOnlyBookmarked" class="rounded bg-slate-950 border-slate-700 text-amber-500 focus:ring-0">
+              <span>⭐ 要復習マークのみ</span>
+            </label>
+          </div>
+
+          <div class="text-xs text-slate-400">
+            該当問題数: <strong class="text-sky-400 font-mono text-sm">{{ activeDrillQuestions.length }}</strong> 問
+          </div>
+        </div>
+
+        <div v-if="activeDrillQuestions.length > 0" class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+          <div class="flex items-center justify-between text-xs text-slate-400 pb-2 border-b border-slate-800">
+            <span>問題 {{ currentDrillIndex + 1 }} / {{ activeDrillQuestions.length }}</span>
+            <span class="bg-slate-800 text-sky-400 px-2 py-0.5 rounded">{{ currentDrillQuestion.chapterName }}</span>
+          </div>
+
+          <h3 class="text-base font-medium text-slate-100 leading-relaxed whitespace-pre-wrap">
+            {{ currentDrillQuestion.question }}
+          </h3>
+
+          <div class="space-y-2.5">
+            <button 
+              v-for="(option, idx) in currentDrillQuestion.options" 
+              :key="idx"
+              @click="handleDrillOptionClick(idx)"
+              :disabled="drillAnswered"
+              class="w-full text-left p-3.5 rounded-xl border text-xs md:text-sm transition-all flex items-start gap-3"
+              :class="getDrillOptionClass(idx)">
+              <div class="w-5 h-5 rounded flex items-center justify-center text-xs font-bold shrink-0 border"
+                   :class="getDrillBadgeClass(idx)">
+                {{ idx + 1 }}
+              </div>
+              <span class="flex-1 leading-relaxed">{{ option }}</span>
             </button>
           </div>
-          <div id="exam-review-container" class="review-items-list">
-            <!-- レビュー項目 -->
-          </div>
-        </div>
-      </div>
-    </section>
 
-    <!-- 2. 分野別ドリルタブ -->
-    <section id="drill-tab" class="tab-pane">
-      <div class="card">
-        <h2>分野別・章別ドリル</h2>
-        <p class="subtitle">JDLAシラバスの分野を選択して、1問1答形式で集中特訓できます。即時音声解説にも対応。</p>
-        <div class="category-grid" id="drill-category-grid">
-          <!-- カテゴリカード動的生成 -->
-        </div>
-      </div>
-
-      <!-- ドリル問題ビュー -->
-      <div id="drill-active-view" class="card hidden">
-        <div class="drill-header">
-          <button id="btn-drill-back" class="btn btn-outline btn-sm">← 分野選択に戻る</button>
-          <div class="drill-progress" id="drill-progress-text">問題 1 / 5</div>
-        </div>
-        <div class="question-header">
-          <div style="display:flex; justify-content:space-between; align-items:center;">
-            <span class="category-badge" id="drill-category-name">分野</span>
-            <button id="btn-speak-drill-q" class="btn btn-outline btn-sm" title="問題文を読み上げ">🔊 読み上げ</button>
-          </div>
-          <h3 id="drill-question-text" class="question-title mt-2">問題文</h3>
-        </div>
-        <div class="choices-list" id="drill-choices-container"></div>
-
-        <!-- 即時解説エリア -->
-        <div id="drill-explanation-box" class="explanation-box hidden">
-          <div class="explanation-top-row">
-            <div class="explanation-status" id="drill-result-banner"></div>
-            <button id="btn-speak-drill-exp" class="btn btn-outline btn-sm">🔊 解説を音声で聞く</button>
-          </div>
-          <div class="explanation-content" id="drill-explanation-text"></div>
-          <div class="drill-footer-nav">
-            <button id="btn-drill-next" class="btn btn-primary">次の問題へ進む ▶</button>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- 3. 各章 聞き流し学習タブ -->
-    <section id="audio-flow-tab" class="tab-pane">
-      <div class="card flow-control-card">
-        <div class="flow-header">
-          <div>
-            <h2>🎧 各章・重要用語 聞き流し学習モード</h2>
-            <p class="subtitle">画面を見ずに音声だけで各分野の問題・正解・詳細解説や重要用語を連続インプット。通勤中・運動中・就寝前の耳学習に最適です。</p>
-          </div>
-          <div class="flow-mode-switch">
-            <button class="btn flow-mode-btn active" id="btn-flow-mode-questions" data-flow-mode="questions">📚 実践問題</button>
-            <button class="btn flow-mode-btn" id="btn-flow-mode-relation" data-flow-mode="relation">🔗 リレーション特訓</button>
-            <button class="btn flow-mode-btn" id="btn-flow-mode-terms" data-flow-mode="terms">📖 重要用語集</button>
-          </div>
-        </div>
-
-        <!-- 選択エリア（分野セレクター & 設定） -->
-        <div class="flow-settings-bar">
-          <div class="flow-category-select-wrapper">
-            <label for="flow-category-select">再生する章・分野:</label>
-            <select id="flow-category-select" class="form-control">
-              <option value="all">🎯 すべての分野をまとめて再生</option>
-              <!-- 動的生成 -->
-            </select>
-          </div>
-          <div class="flow-options-group">
-            <label class="flow-checkbox-label" title="再生中にスマートフォンの画面が自動消灯・スリープするのを防ぎます">
-              <input type="checkbox" id="flow-wakelock-toggle" checked>
-              <span>💡 スリープ防止 (常時点灯)</span>
-            </label>
-            <label class="flow-checkbox-label">
-              <input type="checkbox" id="flow-thinking-toggle" checked>
-              <span>⏱️ シンキングタイム (3秒考える)</span>
-            </label>
-            <label class="flow-checkbox-label">
-              <input type="checkbox" id="flow-repeat-toggle" checked>
-              <span>🔁 ループ再生</span>
-            </label>
-            <div class="flow-speed-group">
-              <label for="flow-speed-select">速度:</label>
-              <select id="flow-speed-select" class="form-control form-control-sm">
-                <option value="0.8">0.8x</option>
-                <option value="1.0" selected>1.0x (標準)</option>
-                <option value="1.2">1.2x (快適)</option>
-                <option value="1.5">1.5x (速聴)</option>
-                <option value="1.8">1.8x</option>
-                <option value="2.0">2.0x (倍速)</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
-        <!-- プレイヤー操作コンソール -->
-        <div class="flow-player-console">
-          <div class="flow-status-row">
-            <span class="flow-status-badge" id="flow-status-badge">⏹ 停止中</span>
-            <span class="flow-counter-text" id="flow-counter-text">0 / 0 項目</span>
-            <span class="flow-category-pill" id="flow-current-category-pill">全般</span>
-            <span class="flow-wakelock-pill hidden" id="flow-wakelock-pill">🔆 画面点灯維持中</span>
-          </div>
-
-          <div class="flow-progress-bar-wrapper">
-            <div class="flow-progress-bar-fill" id="flow-progress-bar-fill" style="width: 0%;"></div>
-          </div>
-
-          <div class="flow-controls-main">
-            <button id="btn-flow-prev" class="btn btn-secondary flow-btn-control" title="前の項目へ">⏮ 前へ</button>
-            <button id="btn-flow-play-pause" class="btn btn-primary btn-lg flow-btn-play" title="再生 / 一時停止">▶ 聞き流しを開始</button>
-            <button id="btn-flow-next" class="btn btn-secondary flow-btn-control" title="次の項目へ">次へ ⏭</button>
-            <button id="btn-flow-stop" class="btn btn-outline flow-btn-control" title="停止">⏹ 停止</button>
-          </div>
-        </div>
-
-        <!-- 現在再生中アイテムのハイライトカード -->
-        <div class="flow-current-card" id="flow-current-card">
-          <div class="flow-card-badge-row">
-            <span class="flow-item-num" id="flow-item-num">項目 1</span>
-            <span class="flow-step-phase" id="flow-step-phase">「聞き流しを開始」ボタンを押すと音声学習がスタートします</span>
-          </div>
-          <h3 class="flow-item-title" id="flow-item-title">各分野の問題と詳細解説、または重要用語が自動で順番に読み上げられます。</h3>
-          <!-- 選択肢一覧 -->
-          <div class="flow-choices-list" id="flow-choices-list"></div>
-          <div class="flow-item-answer-box hidden" id="flow-item-answer-box">
-            <span class="flow-ans-label">正解:</span>
-            <span class="flow-ans-text" id="flow-item-answer-text"></span>
-          </div>
-          <div class="flow-item-explanation-box hidden" id="flow-item-explanation-box">
-            <div class="flow-exp-label">詳細解説:</div>
-            <div class="flow-exp-text" id="flow-item-explanation-text"></div>
-          </div>
-          <!-- 知識のリレーション・体系的つながりボックス -->
-          <div class="flow-item-relation-box hidden" id="flow-item-relation-box">
-            <div class="flow-rel-header">
-              <span class="flow-rel-icon">🔗</span>
-              <span class="flow-rel-title">体系的リレーション（関連重要用語・出題文脈）</span>
-            </div>
-            <div class="flow-rel-terms-container" id="flow-rel-terms-container">
-              <!-- 動的生成: 関連用語バッジ（タップで即モーダル確認） -->
-            </div>
-            <div class="flow-rel-note" id="flow-rel-note"></div>
-            <div class="flow-rel-questions-container hidden" id="flow-rel-questions-container">
-              <!-- 動的生成: 出題された実践問題へのジャンプボタン -->
-            </div>
-          </div>
-        </div>
-
-        <!-- リスト一覧（タップでその項目へジャンプ） -->
-        <div class="flow-playlist-wrapper">
-          <div class="flow-playlist-header">
-            <h4>📋 再生リスト一覧 (<span id="flow-list-count">0</span>件) <small style="font-weight:normal; color:#64748b;">※タップでその問題へ即座にスキップ</small></h4>
-          </div>
-          <div class="flow-playlist" id="flow-playlist">
-            <!-- 動的生成 -->
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- 4. 重要用語集タブ -->
-    <section id="terms-tab" class="tab-pane">
-      <div class="card">
-        <div class="terms-top-bar">
-          <div>
-            <h2>G検定 重要用語集 (キーワード事典)</h2>
-            <p class="subtitle">シラバス頻出キーワード・AI最新トレンドの辞書です。全用語の音声読み上げに対応。</p>
-          </div>
-          <div class="terms-search-box">
-            <input type="text" id="terms-search-input" class="form-control" placeholder="用語名、意味、キーワードで検索...">
-            <select id="terms-category-filter" class="form-control">
-              <option value="all">すべての分野</option>
-            </select>
-            <button id="btn-start-terms-flow" class="btn btn-outline btn-sm" title="重要用語を音声で連続聞き流し">🎧 用語を聞き流す</button>
-          </div>
-        </div>
-        <div class="terms-list" id="terms-container">
-          <!-- 用語カード動的生成 -->
-        </div>
-      </div>
-    </section>
-
-    <!-- 4. 問題の手動登録・管理タブ -->
-    <section id="admin-tab" class="tab-pane">
-      <div class="card form-card">
-        <div class="card-header">
-          <h2>問題の手動登録（手打ち追加）</h2>
-          <p class="subtitle">
-            手元の過去問・新傾向問題を登録すると、即座にローカルの <code>data/questions.json</code> に反映され、模擬試験やドリルで出題されるようになります。
-          </p>
-        </div>
-        <div class="card-body">
-          <form id="add-question-form">
-            <div class="form-row">
-              <div class="form-group flex-2">
-                <label for="form-category">分野（JDLAシラバス） <span class="req">*</span></label>
-                <select id="form-category" class="form-control" required>
-                  <!-- 分野リスト -->
-                </select>
-              </div>
-              <div class="form-group flex-1">
-                <label for="form-source">出題元・タグ</label>
-                <input type="text" id="form-source" class="form-control" placeholder="例: 手動追加, 2024第1回再現" value="手動追加">
-              </div>
-            </div>
-
-            <div class="form-group">
-              <label for="form-question">問題文 <span class="req">*</span></label>
-              <textarea id="form-question" class="form-control" rows="3" placeholder="問題文を入力してください（例：〇〇に関する記述として、最も適切なものを1つ選べ。）" required></textarea>
-            </div>
-
-            <div class="form-group">
-              <label>選択肢と正解の指定 <span class="req">*</span> （正解のラジオボタンを選択してください）</label>
-              <div class="choice-input-row">
-                <input type="radio" name="form-answer" value="0" id="ans-0" required checked>
-                <label for="ans-0" class="choice-num-label">①</label>
-                <input type="text" id="choice-0" class="form-control" placeholder="選択肢 1 を入力" required>
-              </div>
-              <div class="choice-input-row">
-                <input type="radio" name="form-answer" value="1" id="ans-1">
-                <label for="ans-1" class="choice-num-label">②</label>
-                <input type="text" id="choice-1" class="form-control" placeholder="選択肢 2 を入力" required>
-              </div>
-              <div class="choice-input-row">
-                <input type="radio" name="form-answer" value="2" id="ans-2">
-                <label for="ans-2" class="choice-num-label">③</label>
-                <input type="text" id="choice-2" class="form-control" placeholder="選択肢 3 を入力" required>
-              </div>
-              <div class="choice-input-row">
-                <input type="radio" name="form-answer" value="3" id="ans-3">
-                <label for="ans-3" class="choice-num-label">④</label>
-                <input type="text" id="choice-3" class="form-control" placeholder="選択肢 4 を入力" required>
-              </div>
-            </div>
-
-            <div class="form-group">
-              <label for="form-explanation">詳細解説（正解理由＋誤り選択肢の解説） <span class="req">*</span></label>
-              <textarea id="form-explanation" class="form-control" rows="4" placeholder="【正解：〇】&#10;■ 選択肢〇（正解）：...&#10;■ 選択肢〇（誤り）：..." required></textarea>
-            </div>
-
-            <div class="form-actions">
-              <button type="submit" class="btn btn-primary btn-lg" id="btn-save-question">
-                💾 この問題を登録してシステムに反映する
+          <div v-if="drillAnswered" class="space-y-3 pt-3 border-t border-slate-800">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold" :class="drillSelectedOption === currentDrillQuestion.correctIndex ? 'text-emerald-400' : 'text-rose-400'">
+                {{ drillSelectedOption === currentDrillQuestion.correctIndex ? '🎉 正解！' : '💥 不正解' }}
+              </span>
+              <button @click="toggleBookmark(currentDrillQuestion)" class="text-xs px-2.5 py-1 rounded-lg border text-amber-300 border-amber-600/50 bg-amber-500/10">
+                {{ currentDrillQuestion.isBookmarked ? '★ 要復習マーク済' : '☆ 要復習に追加' }}
               </button>
             </div>
-          </form>
-        </div>
-      </div>
 
-      <!-- 登録済み問題一覧 -->
-      <div class="card mt-4">
-        <div class="table-header-row">
-          <div>
-            <h3>登録済み問題一覧 (<span id="admin-table-count">0</span>件)</h3>
-            <p class="subtitle">手動登録した問題および初期データを管理できます。</p>
-          </div>
-          <div class="table-actions" style="display:flex; gap:8px;">
-            <input type="text" id="admin-search-input" class="form-control form-control-sm" placeholder="問題文を検索...">
-            <button id="btn-export-json" class="btn btn-outline btn-sm" title="全問題データをJSONファイルとしてダウンロード保存">📥 エクスポート</button>
-            <button id="btn-import-trigger" class="btn btn-outline btn-sm" title="JSONファイルから問題を取り込み">📤 インポート</button>
-            <input type="file" id="admin-file-import" accept=".json" style="display:none;">
-          </div>
-        </div>
-        <div class="table-responsive">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th style="width: 80px;">ID</th>
-                <th style="width: 140px;">分野</th>
-                <th>問題文</th>
-                <th style="width: 70px;">正解</th>
-                <th style="width: 100px;">出題元</th>
-                <th style="width: 80px;">操作</th>
-              </tr>
-            </thead>
-            <tbody id="admin-questions-tbody">
-              <!-- 一覧表示 -->
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </section>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+              <div class="bg-slate-950 p-3 rounded-xl border border-emerald-600/40">
+                <strong class="text-emerald-400 block mb-1">🟢 正解の論理:</strong>
+                <p class="text-slate-200">{{ currentDrillQuestion.explanation }}</p>
+              </div>
+              <div class="bg-slate-950 p-3 rounded-xl border border-amber-600/40">
+                <strong class="text-amber-400 block mb-1">🚨 ここが引っ掛け罠:</strong>
+                <p class="text-amber-200/90 whitespace-pre-wrap">{{ currentDrillQuestion.trapNote }}</p>
+              </div>
+            </div>
 
-  </main>
-
-  <!-- 用語詳細ポップアップモーダル -->
-  <div id="term-modal" class="modal-overlay hidden">
-    <div class="modal-card">
-      <div class="modal-header">
-        <div class="modal-title-group">
-          <h3 id="modal-term-title">用語名</h3>
-          <span class="term-stars" id="modal-term-stars">★★★</span>
-        </div>
-        <button id="modal-btn-close" class="modal-close">&times;</button>
-      </div>
-      <div class="modal-body">
-        <span class="badge-tag mb-2" id="modal-term-category">分野</span>
-        <div class="term-summary modal-summary" id="modal-term-summary">要約</div>
-        <div class="term-details modal-details" id="modal-term-details">詳細解説</div>
-        <div class="modal-relation-section" id="modal-relation-section">
-          <div class="modal-relation-title">🔗 関連する重要用語・体系的つながり</div>
-          <div class="modal-related-terms" id="modal-related-terms"></div>
-          <div class="modal-relation-note" id="modal-relation-note"></div>
-          <div class="modal-related-questions-wrapper" id="modal-related-questions-wrapper">
-            <div class="modal-relation-title" style="margin-top:10px;">🎯 この用語が出題された実践問題</div>
-            <div class="modal-related-questions" id="modal-related-questions"></div>
+            <div class="flex justify-end pt-2">
+              <button @click="nextDrillQuestion" class="bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs px-5 py-2 rounded-xl shadow">
+                次の問題へ進む →
+              </button>
+            </div>
           </div>
         </div>
-      </div>
-      <div class="modal-footer">
-        <button id="modal-btn-speak" class="btn btn-outline btn-sm">🔊 音声で聞く</button>
-        <button id="modal-btn-ok" class="btn btn-primary btn-sm">閉じる</button>
-      </div>
-    </div>
+
+      </section>
+
+
+      <!-- ============================================== -->
+      <!-- TAB 5: 🔢 超頻出！重要数値・判定基準 (フラッシュカード) -->
+      <!-- ============================================== -->
+      <section v-if="activeTab === 'flashcards'" class="space-y-4 max-w-2xl mx-auto w-full py-2">
+        
+        <div class="text-center mb-4">
+          <div class="inline-block bg-emerald-950 text-emerald-300 border border-emerald-800 text-xs px-3 py-1 rounded-full font-bold mb-1">
+            🔢 瞬時暗記マスター
+          </div>
+          <h2 class="text-lg md:text-xl font-bold text-white">超頻出！重要数値・年代・判定基準</h2>
+          <p class="text-xs text-slate-400">カードをタップすると反転します。正確に即答できるまで反復しましょう。</p>
+          <div class="mt-2 text-xs text-slate-400 font-mono">
+            習得状況: <strong class="text-emerald-400">{{ masteredCardsCount }}</strong> / {{ flashcards.length }} 項目完了
+          </div>
+        </div>
+
+        <!-- 3D 反転カード -->
+        <div class="flashcard-wrap w-full">
+          <div 
+            @click="flipFlashcard" 
+            :class="{ flipped: isCardFlipped }"
+            class="flashcard-box bg-slate-900 border border-slate-800 shadow-2xl">
+            
+            <!-- 表面（問い） -->
+            <div class="card-front bg-slate-900 border border-slate-800">
+              <div class="flex items-center justify-between">
+                <span class="text-xs bg-slate-800 text-sky-400 px-2.5 py-0.5 rounded-full font-medium">{{ currentFlashcard.category }}</span>
+                <span class="text-[11px] text-slate-500">（タップで答えを表示 🔄）</span>
+              </div>
+
+              <div class="my-auto py-6">
+                <span class="text-xs text-slate-400 font-bold block mb-1">【テーマ】 {{ currentFlashcard.title }}</span>
+                <h3 class="text-base md:text-lg font-bold text-white leading-relaxed">
+                  {{ currentFlashcard.question }}
+                </h3>
+              </div>
+
+              <div class="flex items-center justify-between text-xs text-slate-500">
+                <span>カード {{ currentCardIndex + 1 }} / {{ flashcards.length }}</span>
+                <span class="text-sky-400 font-medium">裏面を見る →</span>
+              </div>
+            </div>
+
+            <!-- 裏面（正解・基準値） -->
+            <div class="card-back bg-slate-900 border border-emerald-600/50 bg-gradient-to-br from-slate-900 via-slate-900 to-emerald-950/20">
+              <div class="flex items-center justify-between">
+                <span class="text-xs bg-emerald-950 text-emerald-300 border border-emerald-800 px-2.5 py-0.5 rounded-full font-bold">正解・判定基準</span>
+                <button @click.stop="speakText(currentFlashcard.title + '。' + currentFlashcard.answer)" class="text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1">
+                  <span>🔊</span> <span>発音を聴く</span>
+                </button>
+              </div>
+
+              <div class="my-auto py-4">
+                <div class="text-base md:text-lg font-bold text-emerald-300 mb-2 leading-relaxed whitespace-pre-wrap">
+                  {{ currentFlashcard.answer }}
+                </div>
+                <div class="text-xs text-slate-300 bg-slate-950/70 p-3 rounded-xl border border-slate-800 leading-relaxed whitespace-pre-wrap">
+                  <strong class="text-amber-400">💡 重要ポイント:</strong> {{ currentFlashcard.point }}
+                </div>
+              </div>
+
+              <div class="flex items-center justify-between text-xs text-slate-400">
+                <span v-if="masteredCardsMap[currentFlashcard.id]" class="text-emerald-400 font-bold">✅ 習得済み</span>
+                <span v-else class="text-slate-500">未習得</span>
+                <span class="text-slate-500">表面に戻す 🔄</span>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- コントロールボタン -->
+        <div class="flex items-center justify-between gap-2 pt-2">
+          <button @click="prevCard" class="bg-slate-900 hover:bg-slate-800 text-slate-300 text-xs px-4 py-2.5 rounded-xl border border-slate-800">
+            ◀ 前のカード
+          </button>
+          
+          <button @click="flipFlashcard" class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs px-4 py-2.5 rounded-xl border border-slate-700 flex items-center gap-1">
+            <span>🔄</span> <span>反転する</span>
+          </button>
+
+          <button @click="toggleCardMastered" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-5 py-2.5 rounded-xl shadow flex items-center gap-1">
+            <span>{{ masteredCardsMap[currentFlashcard.id] ? '習得解除' : '✅ 覚えた！' }}</span>
+          </button>
+
+          <button @click="nextCard" class="bg-slate-900 hover:bg-slate-800 text-slate-300 text-xs px-4 py-2.5 rounded-xl border border-slate-800">
+            次へ ▶
+          </button>
+        </div>
+
+      </section>
+
+
+      <!-- ============================================== -->
+      <!-- TAB 6: 🎧 全自動！音声聞き流し学習 (Audio) -->
+      <!-- ============================================== -->
+      <section v-if="activeTab === 'audio'" class="space-y-4 max-w-2xl mx-auto w-full py-4">
+        
+        <div class="text-center mb-4">
+          <div class="inline-block bg-indigo-950 text-indigo-300 border border-indigo-800 text-xs px-3 py-1 rounded-full font-bold mb-1">
+            🎧 ハンズフリー耳学
+          </div>
+          <h2 class="text-lg md:text-xl font-bold text-white">全自動！音声聞き流し学習プレイヤー</h2>
+          <p class="text-xs text-slate-400">通勤中・歩行中・就寝前、画面を見ずに耳だけで重要知識を完全インプットできます。</p>
+        </div>
+
+        <!-- プレイヤーカード -->
+        <div class="bg-gradient-to-br from-slate-900 via-slate-900 to-indigo-950/40 border border-slate-800 rounded-2xl p-6 shadow-2xl relative overflow-hidden">
+          
+          <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-800">
+            <div>
+              <span class="text-[11px] text-slate-400">学習コンテンツ:</span>
+              <select v-model="audioContentMode" @change="onAudioContentModeChange" class="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1 text-xs text-slate-200 ml-2 focus:outline-none focus:border-sky-500">
+                <option value="stages">🎯 段階ステップ特訓（全問題）</option>
+                <option value="flashcards">🔢 重要数値・判定基準（フラッシュカード）</option>
+              </select>
+            </div>
+
+            <!-- 再生速度切り替え -->
+            <div class="flex items-center gap-1 text-xs">
+              <span class="text-slate-400 text-[11px]">速度:</span>
+              <button v-for="spd in [1.0, 1.2, 1.5]" :key="spd"
+                      @click="audioSpeed = spd"
+                      :class="audioSpeed === spd ? 'bg-sky-600 text-white font-bold' : 'bg-slate-950 text-slate-400'"
+                      class="px-2 py-0.5 rounded border border-slate-800 text-[11px]">
+                {{ spd }}x
+              </button>
+            </div>
+          </div>
+
+          <!-- 再生中のテキスト表示エリア -->
+          <div class="min-h-[160px] flex flex-col justify-center text-center my-4">
+            <span class="text-xs font-mono text-sky-400 mb-2">
+              TRACK {{ currentAudioTrackIndex + 1 }} / {{ currentAudioPlaylist.length }}
+            </span>
+            
+            <h3 class="text-base md:text-lg font-bold text-white mb-3 leading-relaxed">
+              {{ currentAudioTrack.title || currentAudioTrack.question }}
+            </h3>
+
+            <!-- 状態表示バッジ -->
+            <div class="flex justify-center items-center gap-2">
+              <span v-if="audioPlayState === 'question'" class="bg-sky-950 text-sky-300 border border-sky-800 px-3 py-1 rounded-full text-xs font-bold animate-pulse">
+                🗣️ 設問を朗読中...
+              </span>
+              <span v-else-if="audioPlayState === 'pause'" class="bg-amber-950 text-amber-300 border border-amber-800 px-3 py-1 rounded-full text-xs font-bold animate-pulse-fast">
+                ⏳ 思考タイム（3秒後、正解・罠を朗読）
+              </span>
+              <span v-else-if="audioPlayState === 'answer'" class="bg-emerald-950 text-emerald-300 border border-emerald-800 px-3 py-1 rounded-full text-xs font-bold">
+                💡 正解と解説を朗読中...
+              </span>
+              <span v-else class="text-xs text-slate-500">再生停止中</span>
+            </div>
+          </div>
+
+          <!-- 再生コントロールバー -->
+          <div class="flex items-center justify-center gap-4 pt-4 border-t border-slate-800">
+            <button @click="prevAudioTrack" class="p-3 bg-slate-950 hover:bg-slate-800 rounded-full border border-slate-800 text-slate-300 text-sm">
+              ⏮️
+            </button>
+            
+            <button @click="toggleAudioPlay" class="p-4 bg-sky-600 hover:bg-sky-500 rounded-full text-white text-xl shadow-lg transition-transform transform active:scale-95">
+              <span v-if="isAudioPlaying">⏸️</span>
+              <span v-else>▶️</span>
+            </button>
+
+            <button @click="nextAudioTrack" class="p-3 bg-slate-950 hover:bg-slate-800 rounded-full border border-slate-800 text-slate-300 text-sm">
+              ⏭️
+            </button>
+          </div>
+
+        </div>
+
+      </section>
+
+
+      <!-- ============================================== -->
+      <!-- TAB 7: 🚨 2,000問対応 引っ掛けチートシート -->
+      <!-- ============================================== -->
+      <section v-if="activeTab === 'cheatsheet'" class="space-y-4">
+        
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 md:p-5">
+          <div class="flex items-start justify-between gap-4">
+            <div>
+              <h2 class="text-lg font-bold text-amber-300 flex items-center gap-2">
+                <span>🚨</span> 2,000問 引っ掛け・罠特化チートシート
+              </h2>
+              <p class="text-xs text-slate-400 mt-1">
+                全問題の「引っ掛けポイント」「出題者の罠」を抽出して一覧化。試験直前の総ざらいや本番中の辞書として活用できます。
+              </p>
+            </div>
+            <span class="text-xs bg-amber-950 text-amber-300 border border-amber-800 px-2.5 py-1 rounded-full font-mono shrink-0">
+              該当 {{ filteredCheatSheetQuestions.length }} 件
+            </span>
+          </div>
+
+          <div class="mt-4 flex flex-wrap gap-2 items-center">
+            <div class="relative flex-1 min-w-[240px]">
+              <span class="absolute left-3 top-2.5 text-slate-500 text-xs">🔍</span>
+              <input 
+                type="text" 
+                v-model="cheatSearchQuery" 
+                placeholder="キーワード検索（30条の4, プーリング, RAG, ドロップアウト, 残差結合 など）"
+                class="w-full bg-slate-950 border border-slate-800 rounded-xl pl-8 pr-4 py-2 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-amber-500">
+            </div>
+            
+            <select v-model="selectedCheatChapter" class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-amber-500">
+              <option value="ALL">全章</option>
+              <option v-for="ch in chapters" :key="ch.id" :value="ch.id">{{ ch.name }}</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div 
+            v-for="q in paginatedCheatQuestions" 
+            :key="q.id"
+            class="bg-slate-900 border border-slate-800 hover:border-amber-500/50 rounded-xl p-4 transition-all flex flex-col justify-between space-y-3">
+            
+            <div>
+              <div class="flex items-center justify-between gap-2 mb-2">
+                <span class="text-[11px] bg-slate-800 text-sky-400 px-2 py-0.5 rounded-full font-medium">{{ q.chapterName || q.category }}</span>
+                <span class="text-[11px] font-mono text-emerald-400">正解: {{ q.correctIndex + 1 }}</span>
+              </div>
+              
+              <h4 class="text-xs font-semibold text-slate-200 line-clamp-2 mb-2">
+                {{ q.question }}
+              </h4>
+
+              <div class="bg-amber-950/30 border border-amber-600/40 rounded-lg p-3 text-xs text-amber-200 leading-relaxed whitespace-pre-wrap select-text">
+                <div class="font-bold text-amber-400 mb-1 flex items-center gap-1">
+                  <span>🚨</span> 罠・引っ掛け要点:
+                </div>
+                {{ q.trapNote }}
+              </div>
+            </div>
+
+            <div class="text-[11px] text-slate-400 border-t border-slate-800 pt-2">
+              <strong class="text-emerald-400">正解の根拠:</strong> {{ q.explanation }}
+            </div>
+
+          </div>
+        </div>
+
+        <div v-if="totalPages > 1" class="flex items-center justify-center gap-2 pt-4">
+          <button 
+            @click="cheatPage = Math.max(1, cheatPage - 1)" 
+            :disabled="cheatPage === 1"
+            class="px-3 py-1 rounded bg-slate-800 text-xs text-slate-300 disabled:opacity-40">前へ</button>
+          <span class="text-xs text-slate-400">{{ cheatPage }} / {{ totalPages }} ページ</span>
+          <button 
+            @click="cheatPage = Math.min(totalPages, cheatPage + 1)" 
+            :disabled="cheatPage === totalPages"
+            class="px-3 py-1 rounded bg-slate-800 text-xs text-slate-300 disabled:opacity-40">次へ</button>
+        </div>
+
+      </section>
+
+
+      <!-- ============================================== -->
+      <!-- TAB 8: ➕ 問題管理 & JSONバックアップ -->
+      <!-- ============================================== -->
+      <section v-if="activeTab === 'manage'" class="space-y-6">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+          <h3 class="text-sm font-bold text-slate-200 mb-3">データベース情報 & バックアップ</h3>
+          <div class="flex items-center gap-3 flex-wrap">
+            <button @click="exportJSON" class="bg-sky-600 hover:bg-sky-500 text-white text-xs px-4 py-2 rounded-xl flex items-center gap-1.5 shadow">
+              <span>⬇️</span> 全問題をJSONでダウンロード (バックアップ)
+            </button>
+            <button @click="resetToFactoryPool" class="bg-rose-950 hover:bg-rose-900 text-rose-300 border border-rose-800 text-xs px-4 py-2 rounded-xl">
+              ⚠️ 2,050問の初期問題プールにリセット
+            </button>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- フッター -->
+    <footer class="mt-8 pt-4 border-t border-slate-800/80 text-center text-xs text-slate-500">
+      <p>G検定 絶対合格プログラム | 2,000問バンク × 段階ステップ × 音声聞き流し × 数値暗記 | 完全オフラインPWA</p>
+    </footer>
+
   </div>
 
-  <!-- トースト通知 -->
-  <div id="toast" class="toast hidden"></div>
-
-  <script src="app.js?v=4.4"></script>
+  <script src="app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./service-worker.js')
+          .then((reg) => {
+            console.log('[PWA] Service Worker registered successfully!', reg.scope);
+          })
+          .catch((err) => {
+            console.warn('[PWA] Service Worker registration failed:', err);
+          });
+      });
+    }
+  </script>
 </body>
 </html>
