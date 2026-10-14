@@ -1,3 +1,7 @@
+[v-cloak] {
+  display: none !important;
+}
+
 /* 文字サイズ調整 */
 body.font-size-standard {
   font-size: 14px;

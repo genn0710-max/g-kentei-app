@@ -4,10 +4,20 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
   <title>G検定（ジェネラリスト）絶対合格プログラム【実務者向け 2,000問バンク】</title>
-  <!-- Tailwind CSS CDN -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Vue 3 CDN -->
-  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <!-- Tailwind CSS: ローカル優先 + CDNフォールバック -->
+  <script src="tailwind.js"></script>
+  <script>
+    if (!window.tailwind) {
+      document.write('<script src="https://cdn.tailwindcss.com"><\/script>');
+    }
+  </script>
+  <!-- Vue 3: ローカル優先 + CDNフォールバック -->
+  <script src="vue.global.prod.js"></script>
+  <script>
+    if (!window.Vue) {
+      document.write('<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"><\/script>');
+    }
+  </script>
   <!-- 2000問問題バンク & 重要数値暗記データ -->
   <script src="questions_bank.js"></script>
   <script src="flashcards_data.js"></script>
@@ -25,24 +35,34 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
   <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          fontFamily: {
-            sans: ['"Noto Sans JP"', 'Inter', 'sans-serif'],
+    if (window.tailwind) {
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['"Noto Sans JP"', 'Inter', 'sans-serif'],
+            }
           }
         }
-      }
+      };
     }
   </script>
   <style>
-    [v-cloak] { display: none; }
+    [v-cloak] { display: none !important; }
     .timer-bar {
       transition: width 0.25s linear, background-color 0.3s ease;
     }
   </style>
 </head>
-<body :class="[themeClass, fontSizeClass]" class="bg-slate-950 text-slate-100 min-h-screen font-sans antialiased flex flex-col selection:bg-sky-500 selection:text-white transition-colors">
+<body class="bg-slate-950 text-slate-100 min-h-screen font-sans antialiased flex flex-col selection:bg-sky-500 selection:text-white transition-colors theme-dark font-size-standard">
+
+  <!-- 初回読み込み用スピナー（Vueマウント完了時に自動削除） -->
+  <div id="app-loading" class="flex-1 flex flex-col items-center justify-center min-h-[60vh] text-center p-6 space-y-4">
+    <div class="w-12 h-12 border-4 border-sky-500 border-t-transparent rounded-full animate-spin"></div>
+    <div class="text-lg font-bold text-slate-200">G検定 絶対合格プログラム 起動中...</div>
+    <p class="text-xs text-slate-400">2,310問問題バンク・重要用語・音声エンジンを準備しています</p>
+  </div>
+
   <div id="app" v-cloak class="flex-1 flex flex-col max-w-6xl w-full mx-auto p-3 md:p-6">
     
     <!-- 🏗️ アプリヘッダー -->
@@ -965,6 +985,32 @@
               </span>
               <span v-else class="text-xs text-slate-500">再生停止中</span>
             </div>
+
+            <!-- 選択肢一覧（問題モード時：読み上げ中・思考中も選択肢が見え、正解発表時に正解のみ強調） -->
+            <div v-if="audioContentMode !== 'flashcards' && currentAudioTrack.options" class="mt-4 space-y-2 text-left max-w-xl mx-auto w-full">
+              <div v-for="(opt, idx) in currentAudioTrack.options" :key="idx"
+                   class="p-2.5 rounded-xl border text-xs flex items-start gap-2.5 transition-all"
+                   :class="audioPlayState === 'answer' && idx === currentAudioTrack.correctIndex ? 'bg-emerald-950/60 border-emerald-500 text-emerald-200 font-bold ring-1 ring-emerald-500/50' : 'bg-slate-950/60 border-slate-800 text-slate-300'">
+                <span class="w-5 h-5 rounded flex items-center justify-center text-[10px] shrink-0 font-bold"
+                      :class="audioPlayState === 'answer' && idx === currentAudioTrack.correctIndex ? 'bg-emerald-500 text-slate-950' : 'bg-slate-800 text-slate-400'">
+                  {{ idx + 1 }}
+                </span>
+                <span class="flex-1 leading-relaxed">{{ opt }}</span>
+                <span v-if="audioPlayState === 'answer' && idx === currentAudioTrack.correctIndex" class="text-emerald-400 text-xs font-bold shrink-0">
+                  正解
+                </span>
+              </div>
+            </div>
+
+            <!-- 正解・解説・罠の表示（正解発表フェーズのみオープン） -->
+            <div v-if="audioPlayState === 'answer'" class="mt-4 p-3.5 rounded-xl bg-slate-950/90 border border-emerald-800/60 text-left text-xs space-y-2 max-w-xl mx-auto w-full animate-fadeIn">
+              <div class="text-emerald-300 leading-relaxed">
+                <strong class="text-emerald-400">💡 正解の根拠:</strong> {{ currentAudioTrack.explanation || currentAudioTrack.point }}
+              </div>
+              <div v-if="currentAudioTrack.trapNote" class="text-amber-300/90 text-[11px] leading-relaxed border-t border-slate-800 pt-1.5">
+                <strong class="text-amber-400">🚨 ここが罠:</strong> {{ currentAudioTrack.trapNote }}
+              </div>
+            </div>
           </div>
 
           <!-- 再生コントロールバー -->
@@ -1099,11 +1145,42 @@
 
   <script src="app.js"></script>
   <script>
+    // 起動監視 & キャッシュリカバリハンドラ
+    window.addEventListener('DOMContentLoaded', () => {
+      setTimeout(() => {
+        const loading = document.getElementById('app-loading');
+        const app = document.getElementById('app');
+        if (loading && app && app.hasAttribute('v-cloak')) {
+          loading.innerHTML = `
+            <div class="max-w-md p-6 bg-slate-900 border border-amber-600/60 rounded-2xl text-center space-y-3 shadow-2xl">
+              <span class="text-3xl">🔄</span>
+              <h3 class="text-sm font-bold text-amber-300">起動の準備中または更新が必要です</h3>
+              <p class="text-xs text-slate-300">ブラウザに過去の古いキャッシュが残っている可能性があります。下のボタンを押して最新状態に同期してください。</p>
+              <button onclick="if('caches' in window){caches.keys().then(k=>Promise.all(k.map(c=>caches.delete(c)))).then(()=>{location.reload(true)})}else{location.reload(true)}" class="px-5 py-2.5 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-xs font-bold shadow-lg transition-all">
+                🔄 最新版を読み直す
+              </button>
+            </div>
+          `;
+        }
+      }, 3500);
+    });
+
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('./service-worker.js')
           .then((reg) => {
             console.log('[PWA] Service Worker registered successfully!', reg.scope);
+            // 新しいSWが見つかった場合は即時更新
+            reg.onupdatefound = () => {
+              const installingWorker = reg.installing;
+              if (installingWorker) {
+                installingWorker.onstatechange = () => {
+                  if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                    console.log('[PWA] New version available, reloading...');
+                  }
+                };
+              }
+            };
           })
           .catch((err) => {
             console.warn('[PWA] Service Worker registration failed:', err);

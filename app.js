@@ -1,46 +1,178 @@
-const { createApp, ref, computed, onMounted, onUnmounted, watch } = Vue;
+const VueObj = (typeof Vue !== 'undefined') ? Vue : (typeof window !== 'undefined' ? window.Vue : null);
+const { createApp, ref, computed, onMounted, onUnmounted, watch } = VueObj;
 
 const DB_NAME = 'GKenteiQuestionDB_v2';
 const DB_VERSION = 1;
 const STORE_NAME = 'questions';
 
+function safeGetItem(key, fallback) {
+  try {
+    const val = localStorage.getItem(key);
+    return val !== null ? val : fallback;
+  } catch(e) {
+    return fallback;
+  }
+}
+
+function safeSetItem(key, val) {
+  try {
+    localStorage.setItem(key, val);
+  } catch(e) {}
+}
+
 function openDatabase() {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.onupgradeneeded = (e) => {
-      const db = e.target.result;
-      if (!db.objectStoreNames.contains(STORE_NAME)) {
-        db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+    try {
+      if (typeof indexedDB === 'undefined') {
+        return reject(new Error('IndexedDB not supported'));
       }
-    };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
+      const req = indexedDB.open(DB_NAME, DB_VERSION);
+      req.onupgradeneeded = (e) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains(STORE_NAME)) {
+          db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+        }
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    } catch(err) {
+      reject(err);
+    }
   });
 }
 
 async function getAllFromDB() {
-  const db = await openDatabase();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, 'readonly');
-    const store = tx.objectStore(STORE_NAME);
-    const req = store.getAll();
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
+  try {
+    const db = await openDatabase();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readonly');
+      const store = tx.objectStore(STORE_NAME);
+      const req = store.getAll();
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  } catch(e) {
+    return [];
+  }
 }
 
 async function saveAllToDB(items) {
-  const db = await openDatabase();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, 'readwrite');
-    const store = tx.objectStore(STORE_NAME);
-    store.clear();
-    for (const item of items) {
-      store.put(item);
+  try {
+    const db = await openDatabase();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      const store = tx.objectStore(STORE_NAME);
+      store.clear();
+      for (const item of items) {
+        store.put(item);
+      }
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch(e) {
+    console.warn('IndexedDB write skipped:', e);
+  }
+}
+
+// G検定・主要AI用語の正確な発音辞書補正
+function cleanTextForSpeech(text) {
+  if (!text || typeof text !== 'string') return '';
+  let clean = text
+    .replace(/【|】|■|○|×|★|▼|▲|●|◆|◇|◎/g, ' ')
+    .replace(/第\s*(\d+)\s*問/g, 'だい $1 もん')
+    .replace(/①/g, '1番、').replace(/②/g, '2番、').replace(/③/g, '3番、').replace(/④/g, '4番、')
+    .replace(/ＸＡＩ/gi, 'エックスエーアイ')
+    .replace(/(?<![a-zA-Z])XAI(?![a-zA-Z])/gi, 'エックスエーアイ')
+    .replace(/ＡＩ/g, 'エーアイ')
+    .replace(/(?<![a-zA-Z])AI(?![a-zA-Z])/g, 'エーアイ')
+    .replace(/(?<![a-zA-Z])Ai(?![a-zA-Z])/g, 'エーアイ')
+    .replace(/汎化性能/g, 'はんかせいのう')
+    .replace(/汎化誤差/g, 'はんかごさ')
+    .replace(/汎化能力/g, 'はんかのうりょく')
+    .replace(/汎化/g, 'はんか')
+    .replace(/汎用人工知能/g, 'はんようじんこうちのう')
+    .replace(/汎用性/g, 'はんようせい')
+    .replace(/汎用/g, 'はんよう')
+    .replace(/最尤推定法/g, 'さいゆうすいていほう')
+    .replace(/最尤推定/g, 'さいゆうすいてい')
+    .replace(/最尤法/g, 'さいゆうほう')
+    .replace(/対数尤度/g, 'たいすうゆうど')
+    .replace(/尤度比/g, 'ゆうどひ')
+    .replace(/尤度/g, 'ゆうど')
+    .replace(/確率的勾配降下法/g, 'かくりつてきこうばいこうかほう')
+    .replace(/勾配降下法/g, 'こうばいこうかほう')
+    .replace(/最急降下法/g, 'さいきゅうこうかほう')
+    .replace(/勾配消失/g, 'こうばいしょうしつ')
+    .replace(/勾配爆発/g, 'こうばいばくはつ')
+    .replace(/勾配/g, 'こうばい')
+    .replace(/鞍点/g, 'あんてん')
+    .replace(/誤差逆伝播法/g, 'ごさぎゃくでんぱほう')
+    .replace(/誤差逆伝播/g, 'ごさぎゃくでんぱ')
+    .replace(/逆伝播/g, 'ぎゃくでんぱ')
+    .replace(/順伝播/g, 'じゅんでんぱ')
+    .replace(/過学習/g, 'かがくしゅう')
+    .replace(/未学習/g, 'みがくしゅう')
+    .replace(/正則化/g, 'せいそくか')
+    .replace(/交差検証法/g, 'こうさけんしょうほう')
+    .replace(/交差検証/g, 'こうさけんしょう')
+    .replace(/適合率/g, 'てきごうりつ')
+    .replace(/再現率/g, 'さいげんりつ')
+    .replace(/正解率/g, 'せいかいりつ')
+    .replace(/特異度/g, 'とくいど')
+    .replace(/混同行列/g, 'こんどうぎょうれつ')
+    .replace(/主成分分析/g, 'しゅせいぶんぶんせき')
+    .replace(/次元削減/g, 'じげんさくげん')
+    .replace(/決定木/g, 'けっていぎ')
+    .replace(/回帰木/g, 'かいきぎ')
+    .replace(/畳み込み層/g, 'たたみこみそう')
+    .replace(/畳み込み/g, 'たたみこみ')
+    .replace(/全結合層/g, 'ぜんけつごうそう')
+    .replace(/重み減衰/g, 'おもみげんすい')
+    .replace(/知識蒸留/g, 'ちしきじょうりゅう')
+    .replace(/不均衡データ/g, 'ふきんこうデータ')
+    .replace(/不均衡/g, 'ふきんこう')
+    .replace(/大域的最適解/g, 'たいいきてきさいてきかい')
+    .replace(/大局的最適解/g, 'たいきょくてきさいてきかい')
+    .replace(/局所最適解/g, 'きょくしょさいてきかい')
+    .replace(/活性化関数/g, 'かっせいかかんすう')
+    .replace(/損失関数/g, 'そんしつかんすう')
+    .replace(/目的変数/g, 'もくてきへんすう')
+    .replace(/説明変数/g, 'せつめいへんすう')
+    .replace(/潜在変数/g, 'せんざいへんすう')
+    .replace(/価値関数/g, 'かちかんすう')
+    .replace(/状態価値関数/g, 'じょうたいかちかんすう')
+    .replace(/行動価値関数/g, 'こうどうかちかんすう')
+    .replace(/方策関数/g, 'ほうさくかんすう')
+    .replace(/報酬関数/g, 'ほうしゅうかんすう')
+    .replace(/多層パーセプトロン/g, 'たそうパーセプトロン')
+    .replace(/単層パーセプトロン/g, 'たんそうパーセプトロン')
+    .replace(/線形回帰/g, 'せんけいかいき')
+    .replace(/非線形/g, 'ひせんけい')
+    .replace(/\n+/g, '。 ');
+  return clean;
+}
+
+// 日英ハイブリッド音声合成用：テキストを日本語と英語（アルファベット）チャンクに最適分割
+function splitTextByLanguage(text) {
+  if (!text) return [];
+  const chunks = [];
+  const regex = /([a-zA-Z][a-zA-Z0-9\-_]*(?:\s+[a-zA-Z][a-zA-Z0-9\-_]*)*)/g;
+  let lastIndex = 0;
+  let match;
+
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      const jaPart = text.slice(lastIndex, match.index);
+      if (jaPart) chunks.push({ text: jaPart, lang: 'ja' });
     }
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
+    chunks.push({ text: match[0], lang: 'en' });
+    lastIndex = regex.lastIndex;
+  }
+  if (lastIndex < text.length) {
+    const remaining = text.slice(lastIndex);
+    if (remaining) chunks.push({ text: remaining, lang: 'ja' });
+  }
+  return chunks;
 }
 
 createApp({
@@ -48,14 +180,21 @@ createApp({
     // ==========================================
     // 基本設定・UIユーティリティ
     // ==========================================
-    const fontSizeClass = ref(localStorage.getItem('gkentei_fontsize') || 'font-size-standard');
-    const themeClass = ref(localStorage.getItem('gkentei_theme') || 'theme-dark');
+    const fontSizeClass = ref(safeGetItem('gkentei_fontsize', 'font-size-standard'));
+    const themeClass = ref(safeGetItem('gkentei_theme', 'theme-dark'));
     const isWakeLockActive = ref(false);
     let wakeLockSentinel = null;
 
+    // bodyのクラスをテーマ・フォントサイズとリアルタイム同期
+    watch([themeClass, fontSizeClass], ([newTheme, newFont]) => {
+      if (typeof document !== 'undefined') {
+        document.body.className = `${newTheme} ${newFont} bg-slate-950 text-slate-100 min-h-screen font-sans antialiased flex flex-col selection:bg-sky-500 selection:text-white transition-colors`;
+      }
+    }, { immediate: true });
+
     const setFontSize = (size) => {
       fontSizeClass.value = size;
-      localStorage.setItem('gkentei_fontsize', size);
+      safeSetItem('gkentei_fontsize', size);
     };
 
     const toggleTheme = () => {
@@ -394,20 +533,59 @@ createApp({
       return currentAudioPlaylist.value[currentAudioTrackIndex.value] || {};
     });
 
+    let ttsVoices = [];
+    const loadVoices = () => {
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        ttsVoices = window.speechSynthesis.getVoices() || [];
+      }
+    };
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.onvoiceschanged = loadVoices;
+      loadVoices();
+    }
+
     const speakText = (text, callback) => {
       if (!('speechSynthesis' in window)) {
         if (callback) callback();
         return;
       }
       window.speechSynthesis.cancel();
-      const ut = new SpeechSynthesisUtterance(text);
-      ut.lang = 'ja-JP';
-      ut.rate = audioSpeed.value;
-      if (callback) {
-        ut.onend = () => callback();
-        ut.onerror = () => callback();
+      const clean = cleanTextForSpeech(text);
+      const chunks = splitTextByLanguage(clean);
+      if (chunks.length === 0) {
+        if (callback) callback();
+        return;
       }
-      window.speechSynthesis.speak(ut);
+
+      if (ttsVoices.length === 0 && 'speechSynthesis' in window) {
+        ttsVoices = window.speechSynthesis.getVoices() || [];
+      }
+      const jaVoice = ttsVoices.find(v => v.lang.startsWith('ja')) || null;
+      const enVoice = ttsVoices.find(v => v.lang.startsWith('en') && (v.name.includes('Samantha') || v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Siri') || true)) || null;
+
+      let idx = 0;
+      const speakNext = () => {
+        if (idx >= chunks.length) {
+          if (callback) callback();
+          return;
+        }
+        const chunk = chunks[idx++];
+        const isEn = (chunk.lang === 'en');
+        const ut = new SpeechSynthesisUtterance(chunk.text);
+        if (isEn && enVoice) {
+          ut.voice = enVoice;
+          ut.lang = enVoice.lang || 'en-US';
+          ut.rate = Math.max(0.85, audioSpeed.value * 0.95);
+        } else {
+          if (jaVoice) ut.voice = jaVoice;
+          ut.lang = 'ja-JP';
+          ut.rate = audioSpeed.value;
+        }
+        ut.onend = () => speakNext();
+        ut.onerror = () => speakNext();
+        window.speechSynthesis.speak(ut);
+      };
+      speakNext();
     };
 
     const playCurrentAudioSequence = () => {
@@ -420,7 +598,8 @@ createApp({
       if (audioContentMode.value === 'flashcards') {
         qText = `テーマ、${track.title}。${track.question}`;
       } else {
-        qText = `設問、${track.question}`;
+        const optList = (track.options || []).map((o, i) => `${i + 1}番、${o}`).join('。');
+        qText = `設問、${track.question}。${optList}`;
       }
 
       speakText(qText, () => {
@@ -813,9 +992,21 @@ createApp({
         console.warn('IndexedDB read failed:', err);
       }
 
+      // window.QUESTIONS_BANK の定義完了を待機（スクリプト読み込み完了待ち）
+      if (!window.QUESTIONS_BANK || !Array.isArray(window.QUESTIONS_BANK)) {
+        for (let i = 0; i < 20; i++) {
+          if (window.QUESTIONS_BANK && Array.isArray(window.QUESTIONS_BANK)) break;
+          await new Promise(r => setTimeout(r, 100));
+        }
+      }
+
       if (window.QUESTIONS_BANK && Array.isArray(window.QUESTIONS_BANK)) {
         allQuestions.value = window.QUESTIONS_BANK;
-        await saveAllToDB(window.QUESTIONS_BANK);
+        try {
+          await saveAllToDB(window.QUESTIONS_BANK);
+        } catch(e) {
+          console.warn('IndexedDB save skipped:', e);
+        }
       }
     };
 
@@ -839,6 +1030,8 @@ createApp({
     };
 
     onMounted(async () => {
+      const loadingEl = document.getElementById('app-loading');
+      if (loadingEl) loadingEl.remove();
       await loadQuestions();
     });
 
