@@ -53,14 +53,19 @@ echo ""
 echo "🚀 GitHubへ送信（プッシュ）中..."
 git remote set-url origin "https://${GITHUB_TOKEN}@github.com/genn0710-max/g-kentei-app.git"
 
-if git push origin main --tags; then
+if git push origin main feature/v5.0-complete --tags; then
   git remote set-url origin "https://github.com/genn0710-max/g-kentei-app.git"
   echo ""
   echo "================================================================"
-  echo "  🎉 おめでとうございます！GitHubへのプッシュが成功しました！"
+  echo "  🎉 おめでとうございます！GitHubへの送信が完了しました！"
   echo "================================================================"
   echo ""
-  echo "公開URL: https://genn0710-max.github.io/g-kentei-app/"
+  echo "📱 スマホ用アクセスURL:"
+  echo "👉 https://genn0710-max.github.io/g-kentei-app/"
+  echo ""
+  echo "※ スマホのカメラで読み取れるQRコード画面をブラウザで開きます。"
+  echo "（GitHub Pagesの初回反映には1〜2分程度かかる場合があります）"
+  open "qr_view.html" 2>/dev/null || true
   open "https://genn0710-max.github.io/g-kentei-app/" 2>/dev/null || true
 else
   git remote set-url origin "https://github.com/genn0710-max/g-kentei-app.git"
