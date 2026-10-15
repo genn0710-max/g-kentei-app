@@ -303,6 +303,34 @@ function cleanTextForSpeech(text) {
     .replace(/ＡＩ/g, 'エーアイ')
     .replace(/(?<![a-zA-Z])AI(?![a-zA-Z])/g, 'エーアイ')
     .replace(/(?<![a-zA-Z])Ai(?![a-zA-Z])/g, 'エーアイ')
+    // F値、p値、Q学習、k近傍法など専門記号の発音補正
+    .replace(/(?<![a-zA-Z])F値(?![a-zA-Z])/g, 'エフち')
+    .replace(/(?<![a-zA-Z])p値(?![a-zA-Z])/g, 'ピーち')
+    .replace(/(?<![a-zA-Z])Q値(?![a-zA-Z])/g, 'キューち')
+    .replace(/(?<![a-zA-Z])Q学習(?![a-zA-Z])/g, 'キューがくしゅう')
+    .replace(/k近傍法/gi, 'ケーきんぼうほう')
+    .replace(/k平均法/gi, 'ケーへいきんほう')
+    .replace(/k分割交差検証/gi, 'ケーぶんかつ こうさけんしょう')
+    .replace(/k分割/gi, 'ケーぶんかつ')
+    .replace(/交差エントロピー/g, 'こうさエントロピー')
+    .replace(/平均二乗誤差/g, 'へいきんにじょうごさ')
+    .replace(/過適合/g, 'かてきごう')
+    .replace(/正則化項/g, 'せいそくかこう')
+    .replace(/潜在空間/g, 'せんざいくうかん')
+    .replace(/事前学習/g, 'じぜんがくしゅう')
+    .replace(/事後確率/g, 'じごかくりつ')
+    .replace(/事前確率/g, 'じぜんかくりつ')
+    .replace(/周辺尤度/g, 'しゅうへんゆうど')
+    .replace(/共分散/g, 'きょうぶんさん')
+    .replace(/固有値/g, 'こゆうち')
+    .replace(/固有ベクトル/g, 'こゆうベクトル')
+    .replace(/特異値分解/g, 'とくいちぶんかい')
+    .replace(/特異値/g, 'とくいち')
+    .replace(/基底関数/g, 'きていかんすう')
+    .replace(/目的関数/g, 'もくてきかんすう')
+    .replace(/多峰性/g, 'たほうせい')
+    .replace(/大局解/g, 'たいきょくかい')
+    .replace(/局所解/g, 'きょくしょかい')
     // 汎化性能・尤度・勾配などG検定重要用語の正確な発音補正（誤読・訓読み防止）
     .replace(/汎化性能/g, 'はんかせいのう')
     .replace(/汎化誤差/g, 'はんかごさ')
@@ -654,7 +682,7 @@ function openTermModal(termId) {
         btn.title = 'タップしてこの問題を音声聞き流しで開く';
         btn.addEventListener('click', () => {
           closeTermModal();
-          startAudioFlowForCategory(q.category, 'questions', qIndex);
+          startAudioFlowForCategory(q.category, 'questions', q.id);
         });
         elements.modalRelatedQuestions.appendChild(btn);
       });
@@ -1271,6 +1299,7 @@ function renderReviewList(filter = 'all') {
         </span>
         <div style="display:flex; gap:8px; align-items:center;">
           <span class="category-badge">${escapeHtml(q.category)}</span>
+          <button class="btn btn-outline btn-sm btn-flow-single-review" data-idx="${idx}" title="この問題を選択肢・シンキング・解説付きの音声フローで特訓">🎧 聞き流し特訓</button>
           <button class="btn btn-outline btn-sm btn-speak-single-review" data-idx="${idx}">🔊 音声解説</button>
         </div>
       </div>
@@ -1299,6 +1328,16 @@ function renderReviewList(filter = 'all') {
     `;
 
     elements.examReviewContainer.appendChild(div);
+  });
+
+  // 個別フロー音声ボタンのイベント付与
+  document.querySelectorAll('.btn-flow-single-review').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const idx = parseInt(e.currentTarget.dataset.idx, 10);
+      const q = state.exam.questions[idx];
+      stopSpeaking();
+      startAudioFlowForCategory(q.category, 'questions', q.id);
+    });
   });
 
   // 個別解説音声ボタンのイベント付与
@@ -1466,6 +1505,28 @@ function handleDrillAnswer(selectedIndex) {
   elements.drillResultBanner.textContent = isCorrect ? '🎉 正解！' : '× 不正解...';
   elements.drillExplanationText.innerHTML = renderTextWithTermLinks(q.explanation);
   elements.drillExplanationBox.classList.remove('hidden');
+
+  const relContainer = document.getElementById('drill-relation-container');
+  if (relContainer) {
+    if (q.relationNote || (q.relatedTerms && q.relatedTerms.length > 0)) {
+      relContainer.classList.remove('hidden');
+      relContainer.innerHTML = `
+        <div style="font-size:0.8rem; font-weight:700; color:var(--accent-color); margin-bottom:4px; display:flex; align-items:center; gap:6px;">
+          <span>🔗 知識の系譜・試験リレーション</span>
+        </div>
+        ${q.relationNote ? `<div style="font-size:0.85rem; color:var(--text-main); margin-bottom:6px; line-height:1.5;">${renderTextWithTermLinks(q.relationNote)}</div>` : ''}
+        ${q.relatedTerms && q.relatedTerms.length > 0 ? `
+          <div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center;">
+            <span style="font-size:0.75rem; color:var(--text-muted);">関連用語:</span>
+            ${q.relatedTerms.map(rt => `<span class="rel-term-pill term-link" data-term-id="${escapeHtml(rt)}">🏷️ ${escapeHtml(rt)}</span>`).join('')}
+          </div>
+        ` : ''}
+      `;
+    } else {
+      relContainer.classList.add('hidden');
+      relContainer.innerHTML = '';
+    }
+  }
 
   attachTermLinkEvents();
 
@@ -2069,7 +2130,7 @@ function updateAudioFlowCard() {
               btn.innerHTML = `<span>🎯 出題実践問題: 第 ${qIndex + 1} 問</span>`;
               btn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                startAudioFlowForCategory(q.category, 'questions', qIndex);
+                startAudioFlowForCategory(q.category, 'questions', q.id);
               });
               elements.flowRelQuestionsContainer.appendChild(btn);
             });
@@ -2651,11 +2712,23 @@ function startThinkingPhase(current, idx) {
     state.audioFlow.phase = 'thinking';
     updateAudioFlowCard();
     clearFlowHighlights();
-    elements.flowStepPhase.textContent = '⏱️ シンキングタイム（3秒間）...';
+    
+    let countdown = 3;
+    elements.flowStepPhase.textContent = `⏱️ シンキングタイム（残り ${countdown} 秒）...`;
     elements.flowStatusBadge.textContent = '思考タイム ⏱️';
     elements.flowStatusBadge.className = 'flow-status-badge thinking';
 
+    const countdownInterval = setInterval(() => {
+      countdown--;
+      if (countdown > 0 && state.audioFlow.isPlaying && !state.audioFlow.isPaused && state.audioFlow.currentIndex === idx) {
+        elements.flowStepPhase.textContent = `⏱️ シンキングタイム（残り ${countdown} 秒）...`;
+      } else {
+        clearInterval(countdownInterval);
+      }
+    }, 1000);
+
     state.audioFlow.timerId = setTimeout(() => {
+      clearInterval(countdownInterval);
       speakAnswerAndExplanation(current, idx);
     }, 3000);
   } else {
@@ -2721,7 +2794,7 @@ function speakAnswerAndExplanation(current, idx) {
   });
 }
 
-function startAudioFlowForCategory(categoryName, mode = 'questions', targetIndex = 0) {
+function startAudioFlowForCategory(categoryName, mode = 'questions', targetIndexOrId = 0) {
   const tabBtn = document.querySelector('.nav-tab[data-tab="audio-flow-tab"]');
   if (tabBtn) tabBtn.click();
 
@@ -2732,10 +2805,22 @@ function startAudioFlowForCategory(categoryName, mode = 'questions', targetIndex
   }
   loadAudioFlowItems();
 
-  if (targetIndex > 0 && targetIndex < state.audioFlow.items.length) {
-    state.audioFlow.currentIndex = targetIndex;
-    updateAudioFlowCard();
+  let targetIdx = 0;
+  if (typeof targetIndexOrId === 'string' || typeof targetIndexOrId === 'number') {
+    const foundIdx = state.audioFlow.items.findIndex(item => 
+      item.id === targetIndexOrId || 
+      (item.question && item.question.id === targetIndexOrId) ||
+      (item.term && item.term.id === targetIndexOrId)
+    );
+    if (foundIdx !== -1) {
+      targetIdx = foundIdx;
+    } else if (typeof targetIndexOrId === 'number' && targetIndexOrId >= 0 && targetIndexOrId < state.audioFlow.items.length) {
+      targetIdx = targetIndexOrId;
+    }
   }
+
+  state.audioFlow.currentIndex = targetIdx;
+  updateAudioFlowCard();
 
   state.audioFlow.isPlaying = true;
   state.audioFlow.isPaused = false;
@@ -2743,7 +2828,32 @@ function startAudioFlowForCategory(categoryName, mode = 'questions', targetIndex
   showToast(`🎧 「${categoryName || '全体'}」の聞き流し学習を開始しました`);
 }
 
+function startAudioFlowWithQuestions(customQuestions, customTitle = '特訓') {
+  if (!customQuestions || customQuestions.length === 0) return;
+
+  const tabBtn = document.querySelector('.nav-tab[data-tab="audio-flow-tab"]');
+  if (tabBtn) tabBtn.click();
+
+  setAudioFlowMode('questions');
+
+  state.audioFlow.items = [...customQuestions];
+  state.audioFlow.currentIndex = 0;
+  state.audioFlow.category = 'custom';
+
+  if (elements.flowCurrentCategoryPill) {
+    elements.flowCurrentCategoryPill.textContent = customTitle;
+  }
+  updateAudioFlowCard();
+  renderAudioFlowPlaylist();
+
+  state.audioFlow.isPlaying = true;
+  state.audioFlow.isPaused = false;
+  playAudioFlowCurrentItem();
+  showToast(`🎧 「${customTitle}」の聞き流し学習を開始しました`);
+}
+
 window.startAudioFlowForCategory = startAudioFlowForCategory;
+window.startAudioFlowWithQuestions = startAudioFlowWithQuestions;
 
 // ==========================================
 // イベントリスナー設定
@@ -2903,6 +3013,19 @@ function setupEventListeners() {
   elements.btnShowAllReviews.addEventListener('click', () => renderReviewList('all'));
   elements.btnSpeakAllExplanations.addEventListener('click', speakAllMistakesExplanations);
 
+  const btnFlowFromMistakes = document.getElementById('btn-flow-from-mistakes');
+  if (btnFlowFromMistakes) {
+    btnFlowFromMistakes.addEventListener('click', () => {
+      const mistakes = state.exam.questions.filter((q, idx) => state.exam.answers[idx] !== q.answer);
+      if (mistakes.length === 0) {
+        alert("🎉 全問正解です！間違えた問題はありません。");
+        return;
+      }
+      stopSpeaking();
+      startAudioFlowWithQuestions(mistakes, `模試誤答復習 (${mistakes.length}問)`);
+    });
+  }
+
   // ドリル
   elements.btnDrillBack.addEventListener('click', () => {
     stopSpeaking();
@@ -2912,6 +3035,18 @@ function setupEventListeners() {
 
   elements.btnSpeakDrillQ.addEventListener('click', speakCurrentDrillQuestion);
   elements.btnSpeakDrillExp.addEventListener('click', speakCurrentDrillExplanation);
+
+  const btnDrillToFlow = document.getElementById('btn-drill-to-flow');
+  if (btnDrillToFlow) {
+    btnDrillToFlow.addEventListener('click', () => {
+      if (!state.drill || !state.drill.questions) return;
+      const q = state.drill.questions[state.drill.currentIndex];
+      if (q) {
+        stopSpeaking();
+        startAudioFlowForCategory(q.category, 'questions', q.id);
+      }
+    });
+  }
 
   elements.btnDrillNext.addEventListener('click', () => {
     stopSpeaking();

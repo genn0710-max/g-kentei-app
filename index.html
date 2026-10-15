@@ -236,6 +236,7 @@
           </div>
 
           <div class="action-buttons result-actions">
+            <button id="btn-flow-from-mistakes" class="btn btn-primary" style="background: linear-gradient(135deg, #4f46e5, #7c3aed); border: none;">🎧 間違えた問題を聞き流し特訓（一連の音声フロー）</button>
             <button id="btn-exam-restart" class="btn btn-primary">もう一度受験する</button>
             <button id="btn-filter-mistakes" class="btn btn-secondary">間違えた問題のみ表示</button>
             <button id="btn-show-all-reviews" class="btn btn-outline">全問の解説を見る</button>
@@ -289,9 +290,13 @@
         <div id="drill-explanation-box" class="explanation-box hidden">
           <div class="explanation-top-row">
             <div class="explanation-status" id="drill-result-banner"></div>
-            <button id="btn-speak-drill-exp" class="btn btn-outline btn-sm">🔊 解説を音声で聞く</button>
+            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+              <button id="btn-drill-to-flow" class="btn btn-outline btn-sm">🎧 この問題を音声フローで特訓</button>
+              <button id="btn-speak-drill-exp" class="btn btn-outline btn-sm">🔊 音声解説</button>
+            </div>
           </div>
           <div class="explanation-content" id="drill-explanation-text"></div>
+          <div id="drill-relation-container" class="review-relation-box hidden" style="margin-top:12px; padding:10px 14px; background:linear-gradient(135deg, rgba(99,102,241,0.08), rgba(168,85,247,0.06)); border:1px dashed var(--accent-color); border-radius:8px;"></div>
           <div class="drill-footer-nav">
             <button id="btn-drill-next" class="btn btn-primary">次の問題へ進む ▶</button>
           </div>
