@@ -1,11 +1,11 @@
-const CACHE_NAME = 'g-kentei-app-cache-v3';
+const CACHE_NAME = 'g-kentei-app-cache-v5.1';
 const STATIC_ASSETS = [
   './',
   './index.html',
-  './style.css',
-  './app.js',
-  './questions_bank.js',
-  './flashcards_data.js',
+  './style.css?v=5.1',
+  './app.js?v=5.1',
+  './questions_bank.js?v=5.1',
+  './flashcards_data.js?v=5.1',
   './manifest.json',
   'https://cdn.tailwindcss.com',
   'https://unpkg.com/vue@3/dist/vue.global.prod.js',
@@ -13,19 +13,19 @@ const STATIC_ASSETS = [
 ];
 
 self.addEventListener('install', (event) => {
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then(async (cache) => {
-      console.log('[SW v3] Pre-caching static assets...');
+      console.log('[SW v5.1] Pre-caching static assets...');
       for (const asset of STATIC_ASSETS) {
         try {
           await cache.add(asset);
         } catch (err) {
-          console.warn('[SW v3] Could not pre-cache asset:', asset, err);
+          console.warn('[SW v5.1] Could not pre-cache asset:', asset, err);
         }
       }
     })
   );
-  self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
@@ -34,23 +34,30 @@ self.addEventListener('activate', (event) => {
       return Promise.all(
         keys.map((key) => {
           if (key !== CACHE_NAME) {
-            console.log('[SW v3] Clearing old cache:', key);
+            console.log('[SW v5.1] Clearing old cache:', key);
             return caches.delete(key);
           }
         })
       );
+    }).then(() => {
+      return self.clients.claim();
+    }).then(() => {
+      return self.clients.matchAll({ type: 'window' });
+    }).then((clients) => {
+      clients.forEach((client) => {
+        client.navigate(client.url);
+      });
     })
   );
-  self.clients.claim();
 });
 
+// Network-First strategy (with offline cache fallback) so updates always reflect immediately
 self.addEventListener('fetch', (event) => {
+  if (event.request.method !== 'GET') return;
+
   event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      if (cachedResponse) {
-        return cachedResponse;
-      }
-      return fetch(event.request).then((networkResponse) => {
+    fetch(event.request)
+      .then((networkResponse) => {
         if (networkResponse && networkResponse.status === 200 && networkResponse.type !== 'opaque') {
           const responseToCache = networkResponse.clone();
           caches.open(CACHE_NAME).then((cache) => {
@@ -58,9 +65,11 @@ self.addEventListener('fetch', (event) => {
           });
         }
         return networkResponse;
-      }).catch(() => {
-        return caches.match('./index.html');
-      });
-    })
+      })
+      .catch(() => {
+        return caches.match(event.request).then((cachedResponse) => {
+          return cachedResponse || caches.match('./index.html');
+        });
+      })
   );
 });

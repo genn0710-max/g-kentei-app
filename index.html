@@ -9,11 +9,11 @@
   <!-- Vue 3 CDN -->
   <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
   <!-- 2310問問題バンク & 183枚重要数値・用語暗記データ -->
-  <script src="questions_bank.js"></script>
-  <script src="flashcards_data.js"></script>
+  <script src="questions_bank.js?v=5.1"></script>
+  <script src="flashcards_data.js?v=5.1"></script>
   <!-- スタイルシート -->
-  <link rel="stylesheet" href="style.css">
-  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="style.css?v=5.1">
+  <link rel="manifest" href="manifest.json?v=5.1">
   <!-- iOS PWA メタタグ -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -1307,13 +1307,14 @@
 
   </div>
 
-  <script src="app.js"></script>
+  <script src="app.js?v=5.1"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./service-worker.js')
+        navigator.serviceWorker.register('./service-worker.js?v=5.1')
           .then((reg) => {
-            console.log('[PWA] Service Worker registered successfully!', reg.scope);
+            reg.update();
+            console.log('[PWA v5.1] Service Worker registered successfully!', reg.scope);
           })
           .catch((err) => {
             console.warn('[PWA] Service Worker registration failed:', err);
