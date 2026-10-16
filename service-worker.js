@@ -1,12 +1,12 @@
-const CACHE_NAME = 'g-kentei-app-cache-v5.1';
+const CACHE_NAME = 'g-kentei-app-cache-v5.2';
 const STATIC_ASSETS = [
   './',
   './index.html',
-  './style.css?v=5.1',
-  './app.js?v=5.1',
-  './questions_bank.js?v=5.1',
-  './flashcards_data.js?v=5.1',
-  './manifest.json',
+  './style.css?v=5.2',
+  './app.js?v=5.2',
+  './questions_bank.js?v=5.2',
+  './flashcards_data.js?v=5.2',
+  './manifest.json?v=5.2',
   'https://cdn.tailwindcss.com',
   'https://unpkg.com/vue@3/dist/vue.global.prod.js',
   'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap'

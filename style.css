@@ -76,3 +76,57 @@ body.theme-light .bg-slate-800 {
 .animate-pulse-fast {
   animation: pulseFast 1s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
+
+/* =========================================================
+   🗣️ 文章追従（カラオケ式リアルタイムハイライト可視化）
+   ========================================================= */
+.speech-chunk {
+  display: inline;
+  padding: 2px 5px;
+  border-radius: 5px;
+  transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+  line-height: 1.9;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+/* ダークモード時の読み上げ中アクティブ文節（蛍光アンバー×純白太字×アンダーライン発光） */
+.speech-chunk.active {
+  background-color: rgba(245, 158, 11, 0.42) !important;
+  color: #ffffff !important;
+  font-weight: 800 !important;
+  border-bottom: 3px solid #fbbf24 !important;
+  box-shadow: 0 0 14px rgba(245, 158, 11, 0.55);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+}
+
+/* ライトモード時の読み上げ中アクティブ文節（蛍光イエローマーカー×濃紺太字） */
+body.theme-light .speech-chunk.active {
+  background-color: #fef08a !important;
+  color: #0f172a !important;
+  font-weight: 800 !important;
+  border-bottom: 3px solid #d97706 !important;
+  box-shadow: 0 2px 8px rgba(217, 119, 6, 0.28);
+  text-shadow: none;
+}
+
+/* 読み上げ完了済み文節 */
+.speech-chunk.spoken {
+  opacity: 0.9;
+  border-bottom: 1.5px dotted rgba(56, 189, 248, 0.45);
+}
+
+/* 読み上げ中セクション枠の発光アニメーション */
+.reading-section-active {
+  border-color: #38bdf8 !important;
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.4), 0 0 18px rgba(56, 189, 248, 0.25) !important;
+  background-color: rgba(14, 116, 144, 0.15) !important;
+  transition: all 0.25s ease;
+}
+
+.reading-trap-active {
+  border-color: #fbbf24 !important;
+  box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.45), 0 0 18px rgba(251, 191, 36, 0.25) !important;
+  background-color: rgba(180, 83, 9, 0.22) !important;
+  transition: all 0.25s ease;
+}

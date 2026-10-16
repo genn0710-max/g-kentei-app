@@ -9,11 +9,11 @@
   <!-- Vue 3 CDN -->
   <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
   <!-- 2310問問題バンク & 183枚重要数値・用語暗記データ -->
-  <script src="questions_bank.js?v=5.1"></script>
-  <script src="flashcards_data.js?v=5.1"></script>
+  <script src="questions_bank.js?v=5.2"></script>
+  <script src="flashcards_data.js?v=5.2"></script>
   <!-- スタイルシート -->
-  <link rel="stylesheet" href="style.css?v=5.1">
-  <link rel="manifest" href="manifest.json?v=5.1">
+  <link rel="stylesheet" href="style.css?v=5.2">
+  <link rel="manifest" href="manifest.json?v=5.2">
   <!-- iOS PWA メタタグ -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -55,11 +55,14 @@
             <span class="text-xs bg-slate-800 text-sky-400 border border-slate-700 px-2.5 py-0.5 rounded-full font-mono">
               v5.1 完全版 ({{ totalQuestionsCount }}問)
             </span>
+            <span class="text-[11px] bg-amber-950/80 text-amber-300 border border-amber-600/60 px-2 py-0.5 rounded-full flex items-center gap-1 font-bold">
+              🗣️ 文章追従ハイライト搭載
+            </span>
             <span class="text-[11px] bg-emerald-950/80 text-emerald-300 border border-emerald-700/60 px-2 py-0.5 rounded-full flex items-center gap-1 font-medium">
               <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>オフライン対応済
             </span>
           </div>
-          <p class="text-xs text-slate-400 mt-1">全モード聞き流し対応 × 正解＆引っ掛け罠解説 × 全モード透視チート機能</p>
+          <p class="text-xs text-slate-400 mt-1">全モード聞き流し × カラオケ式文章追従可視化 × 正解＆引っ掛け罠解説 × 全モード透視チート機能</p>
         </div>
 
         <!-- アクションツールバー -->
@@ -386,20 +389,22 @@
                   <span>👀</span>
                   <span>【チート透視稼働中】 正解は選択肢【 {{ currentStageQuestion.correctIndex + 1 }} 】です！</span>
                 </div>
-                <p class="text-slate-300 leading-relaxed">{{ currentStageQuestion.explanation }}</p>
-                <p class="text-amber-200/90 whitespace-pre-wrap"><strong class="text-amber-400">罠:</strong> {{ currentStageQuestion.trapNote }}</p>
+                <p class="text-slate-300 leading-relaxed" v-html="getTrackedHtml(currentStageQuestion.explanation, currentStageQuestion.id, 'explanation')"></p>
+                <p class="text-amber-200/90 whitespace-pre-wrap"><strong class="text-amber-400">罠:</strong> <span v-html="getTrackedHtml(currentStageQuestion.trapNote, currentStageQuestion.id, 'trap')"></span></p>
               </div>
 
               <!-- 問題文 & 音声読み上げボタン -->
-              <div>
+              <div class="p-3 rounded-xl border border-transparent transition-all" :class="isSectionReading(currentStageQuestion.id, 'question') ? 'reading-section-active' : ''">
                 <div class="flex items-center justify-between text-xs text-slate-400 mb-2">
-                  <span>設問 {{ stagePlayQuestionIndex + 1 }} / {{ stageQuestions.length }}</span>
+                  <div class="flex items-center gap-2">
+                    <span>設問 {{ stagePlayQuestionIndex + 1 }} / {{ stageQuestions.length }}</span>
+                    <span v-if="isSectionReading(currentStageQuestion.id, 'question')" class="bg-sky-500/20 text-sky-300 border border-sky-400/50 px-2 py-0.5 rounded-full text-[10px] font-bold animate-pulse">🗣️ 設問追従ハイライト中</span>
+                  </div>
                   <button @click="speakSingleQuestion(currentStageQuestion)" class="text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1 font-bold">
-                    <span>🔊</span> <span>問題を聴く</span>
+                    <span>🔊</span> <span>問題を聴く（追従）</span>
                   </button>
                 </div>
-                <h3 class="text-sm md:text-base font-medium text-slate-100 leading-relaxed whitespace-pre-wrap">
-                  {{ currentStageQuestion.question }}
+                <h3 class="text-sm md:text-base font-medium text-slate-100 leading-relaxed whitespace-pre-wrap" v-html="getTrackedHtml(currentStageQuestion.question, currentStageQuestion.id, 'question')">
                 </h3>
               </div>
 
@@ -416,34 +421,48 @@
                        :class="getStageBadgeClass(idx)">
                     {{ idx + 1 }}
                   </div>
-                  <span class="flex-1 leading-relaxed">{{ option }}</span>
+                  <span class="flex-1 leading-relaxed" v-html="getTrackedHtml(option, currentStageQuestion.id, 'option-' + idx)"></span>
                   
-                  <template v-if="isGlobalCheatMode && !stageAnswered && idx === currentStageQuestion.correctIndex">
-                    <span class="text-emerald-400 font-bold text-xs shrink-0 self-center">✓ 正解(透視中)</span>
+                  <template v-if="(isGlobalCheatMode || isAudioRevealing(currentStageQuestion.id)) && !stageAnswered && idx === currentStageQuestion.correctIndex">
+                    <span class="text-emerald-400 font-bold text-xs shrink-0 self-center">✓ 正解</span>
                   </template>
                 </button>
               </div>
 
-              <!-- 解答後解説 -->
-              <div v-if="stageAnswered" class="space-y-3 pt-3 border-t border-slate-800">
+              <!-- 思考タイム表示バナー（聞き流し中） -->
+              <div v-if="readingItemId === null && isGlobalAudioPlaying && globalAudioState === 'thinking'" class="bg-amber-950/60 border border-amber-500/70 p-3 rounded-xl text-center text-xs font-bold text-amber-300 animate-pulse">
+                ⏳ シンキングタイム（残り {{ thinkingCountdown }} 秒）... 頭の中で正解を思い浮かべてください！
+              </div>
+
+              <!-- 解答後解説（または聞き流し解説フェーズ時に自動展開＆カラオケ追従） -->
+              <div v-if="stageAnswered || isAudioRevealing(currentStageQuestion.id)" class="space-y-3 pt-3 border-t border-slate-800">
                 <div class="flex items-center justify-between">
-                  <span class="text-xs font-bold" :class="stageSelectedOption === currentStageQuestion.correctIndex ? 'text-emerald-400' : 'text-rose-400'">
+                  <span v-if="stageAnswered" class="text-xs font-bold" :class="stageSelectedOption === currentStageQuestion.correctIndex ? 'text-emerald-400' : 'text-rose-400'">
                     {{ stageSelectedOption === currentStageQuestion.correctIndex ? '🎉 正解！' : '💥 不正解' }}
                     （正解: 選択肢 {{ currentStageQuestion.correctIndex + 1 }}）
                   </span>
+                  <span v-else class="text-xs font-bold text-emerald-400">
+                    🎧 音声解説連動表示中（正解: 選択肢 {{ currentStageQuestion.correctIndex + 1 }}）
+                  </span>
                   <button @click="speakSingleExplanation(currentStageQuestion)" class="text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1 font-bold">
-                    <span>🔊</span> <span>解説・罠を聴く</span>
+                    <span>🔊</span> <span>解説・罠を聴く（追従）</span>
                   </button>
                 </div>
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-                  <div class="bg-slate-950 p-3 rounded-xl border border-emerald-600/40">
-                    <strong class="text-emerald-400 block mb-1">🟢 正解の論理:</strong>
-                    <p class="text-slate-200 leading-relaxed">{{ currentStageQuestion.explanation }}</p>
+                  <div class="bg-slate-950 p-3 rounded-xl border border-emerald-600/40 transition-all" :class="isSectionReading(currentStageQuestion.id, 'explanation') ? 'reading-section-active' : ''">
+                    <strong class="text-emerald-400 block mb-1 flex items-center justify-between">
+                      <span>🟢 正解の論理:</span>
+                      <span v-if="isSectionReading(currentStageQuestion.id, 'explanation')" class="text-[10px] bg-sky-500/20 text-sky-300 px-2 py-0.5 rounded-full animate-pulse">🗣️ 追従朗読中</span>
+                    </strong>
+                    <p class="text-slate-200 leading-relaxed" v-html="getTrackedHtml(currentStageQuestion.explanation, currentStageQuestion.id, 'explanation')"></p>
                   </div>
-                  <div class="bg-slate-950 p-3 rounded-xl border border-amber-600/40">
-                    <strong class="text-amber-400 block mb-1">🚨 ここが引っ掛け罠:</strong>
-                    <p class="text-amber-200/90 whitespace-pre-wrap leading-relaxed">{{ currentStageQuestion.trapNote }}</p>
+                  <div class="bg-slate-950 p-3 rounded-xl border border-amber-600/40 transition-all" :class="isSectionReading(currentStageQuestion.id, 'trap') ? 'reading-trap-active' : ''">
+                    <strong class="text-amber-400 block mb-1 flex items-center justify-between">
+                      <span>🚨 ここが引っ掛け罠:</span>
+                      <span v-if="isSectionReading(currentStageQuestion.id, 'trap')" class="text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full animate-pulse">🗣️ 追従朗読中</span>
+                    </strong>
+                    <p class="text-amber-200/90 whitespace-pre-wrap leading-relaxed" v-html="getTrackedHtml(currentStageQuestion.trapNote, currentStageQuestion.id, 'trap')"></p>
                   </div>
                 </div>
 
@@ -618,19 +637,20 @@
                 <span>👀</span>
                 <span>【チート透視稼働中】 正解は選択肢【 {{ currentExamQuestion.correctIndex + 1 }} 】です！</span>
               </div>
-              <p class="text-slate-300 leading-relaxed">{{ currentExamQuestion.explanation }}</p>
-              <p class="text-amber-200/90 whitespace-pre-wrap"><strong class="text-amber-400">罠:</strong> {{ currentExamQuestion.trapNote }}</p>
+              <p class="text-slate-300 leading-relaxed" v-html="getTrackedHtml(currentExamQuestion.explanation, currentExamQuestion.id, 'explanation')"></p>
+              <p class="text-amber-200/90 whitespace-pre-wrap"><strong class="text-amber-400">罠:</strong> <span v-html="getTrackedHtml(currentExamQuestion.trapNote, currentExamQuestion.id, 'trap')"></span></p>
             </div>
 
             <!-- 問題文 & 音声読み上げボタン -->
-            <div class="mb-5 flex-1">
-              <div class="flex justify-end mb-1">
+            <div class="mb-5 flex-1 p-3 rounded-xl border border-transparent transition-all" :class="isSectionReading(currentExamQuestion.id, 'question') ? 'reading-section-active' : ''">
+              <div class="flex items-center justify-between mb-1">
+                <span v-if="isSectionReading(currentExamQuestion.id, 'question')" class="bg-sky-500/20 text-sky-300 border border-sky-400/50 px-2 py-0.5 rounded-full text-[10px] font-bold animate-pulse">🗣️ 設問追従ハイライト中</span>
+                <span v-else></span>
                 <button @click="speakSingleQuestion(currentExamQuestion)" class="text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1 font-bold">
-                  <span>🔊</span> <span>問題を聴く</span>
+                  <span>🔊</span> <span>問題を聴く（追従）</span>
                 </button>
               </div>
-              <h2 class="text-base md:text-lg font-medium text-slate-100 leading-relaxed whitespace-pre-wrap select-text">
-                {{ currentExamQuestion.question }}
+              <h2 class="text-base md:text-lg font-medium text-slate-100 leading-relaxed whitespace-pre-wrap select-text" v-html="getTrackedHtml(currentExamQuestion.question, currentExamQuestion.id, 'question')">
               </h2>
             </div>
 
@@ -647,10 +667,10 @@
                      :class="getExamBadgeClass(idx)">
                   {{ idx + 1 }}
                 </div>
-                <span class="leading-relaxed flex-1">{{ option }}</span>
+                <span class="leading-relaxed flex-1" v-html="getTrackedHtml(option, currentExamQuestion.id, 'option-' + idx)"></span>
                 
-                <template v-if="isGlobalCheatMode && examUserAnswers[currentExamIndex] === null && idx === currentExamQuestion.correctIndex">
-                  <span class="text-emerald-400 font-bold text-xs shrink-0 self-center">✓ 正解(透視中)</span>
+                <template v-if="(isGlobalCheatMode || isAudioRevealing(currentExamQuestion.id)) && examUserAnswers[currentExamIndex] === null && idx === currentExamQuestion.correctIndex">
+                  <span class="text-emerald-400 font-bold text-xs shrink-0 self-center">✓ 正解</span>
                 </template>
 
                 <template v-if="selectedExamMode === 'intensive20' && examUserAnswers[currentExamIndex] !== null">
@@ -660,22 +680,29 @@
               </button>
             </div>
 
-            <!-- 濃縮20分版 即時解説カード -->
-            <div v-if="selectedExamMode === 'intensive20' && examUserAnswers[currentExamIndex] !== null" 
+            <!-- 濃縮20分版 または 聞き流し解説フェーズ時の即時解説カード -->
+            <div v-if="(selectedExamMode === 'intensive20' && examUserAnswers[currentExamIndex] !== null) || isAudioRevealing(currentExamQuestion.id)" 
                  class="space-y-3 pt-3 border-t border-slate-800 mb-4 animate-fade-in">
-              <div class="flex justify-end">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-emerald-400">正解: 選択肢 {{ currentExamQuestion.correctIndex + 1 }}</span>
                 <button @click="speakSingleExplanation(currentExamQuestion)" class="text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1 font-bold">
-                  <span>🔊</span> <span>解説・罠を聴く</span>
+                  <span>🔊</span> <span>解説・罠を聴く（追従）</span>
                 </button>
               </div>
               <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div class="bg-slate-950 border border-emerald-600/40 rounded-xl p-3 text-xs">
-                  <h4 class="font-bold text-emerald-400 mb-1 flex items-center gap-1">🟢 正解の論理</h4>
-                  <p class="text-slate-200 leading-relaxed">{{ currentExamQuestion.explanation }}</p>
+                <div class="bg-slate-950 border border-emerald-600/40 rounded-xl p-3 text-xs transition-all" :class="isSectionReading(currentExamQuestion.id, 'explanation') ? 'reading-section-active' : ''">
+                  <h4 class="font-bold text-emerald-400 mb-1 flex items-center justify-between">
+                    <span>🟢 正解の論理</span>
+                    <span v-if="isSectionReading(currentExamQuestion.id, 'explanation')" class="text-[10px] bg-sky-500/20 text-sky-300 px-2 py-0.5 rounded-full animate-pulse">🗣️ 追従朗読中</span>
+                  </h4>
+                  <p class="text-slate-200 leading-relaxed" v-html="getTrackedHtml(currentExamQuestion.explanation, currentExamQuestion.id, 'explanation')"></p>
                 </div>
-                <div class="bg-slate-950 border border-amber-600/40 rounded-xl p-3 text-xs">
-                  <h4 class="font-bold text-amber-400 mb-1 flex items-center gap-1">🚨 ここが引っ掛け罠！</h4>
-                  <p class="text-amber-200/90 leading-relaxed whitespace-pre-wrap">{{ currentExamQuestion.trapNote }}</p>
+                <div class="bg-slate-950 border border-amber-600/40 rounded-xl p-3 text-xs transition-all" :class="isSectionReading(currentExamQuestion.id, 'trap') ? 'reading-trap-active' : ''">
+                  <h4 class="font-bold text-amber-400 mb-1 flex items-center justify-between">
+                    <span>🚨 ここが引っ掛け罠！</span>
+                    <span v-if="isSectionReading(currentExamQuestion.id, 'trap')" class="text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full animate-pulse">🗣️ 追従朗読中</span>
+                  </h4>
+                  <p class="text-amber-200/90 leading-relaxed whitespace-pre-wrap" v-html="getTrackedHtml(currentExamQuestion.trapNote, currentExamQuestion.id, 'trap')"></p>
                 </div>
               </div>
             </div>
@@ -857,23 +884,27 @@
               <span>👀</span>
               <span>【チート透視稼働中】 正解は選択肢【 {{ currentDrillQuestion.correctIndex + 1 }} 】です！</span>
             </div>
-            <p class="text-slate-300 leading-relaxed">{{ currentDrillQuestion.explanation }}</p>
-            <p class="text-amber-200/90 whitespace-pre-wrap"><strong class="text-amber-400">罠:</strong> {{ currentDrillQuestion.trapNote }}</p>
+            <p class="text-slate-300 leading-relaxed" v-html="getTrackedHtml(currentDrillQuestion.explanation, currentDrillQuestion.id, 'explanation')"></p>
+            <p class="text-amber-200/90 whitespace-pre-wrap"><strong class="text-amber-400">罠:</strong> <span v-html="getTrackedHtml(currentDrillQuestion.trapNote, currentDrillQuestion.id, 'trap')"></span></p>
           </div>
 
-          <div class="flex items-center justify-between text-xs text-slate-400 pb-2 border-b border-slate-800">
-            <span>問題 {{ currentDrillIndex + 1 }} / {{ activeDrillQuestions.length }}</span>
-            <div class="flex items-center gap-2">
-              <span class="bg-slate-800 text-sky-400 px-2 py-0.5 rounded">{{ currentDrillQuestion.chapterName }}</span>
-              <button @click="speakSingleQuestion(currentDrillQuestion)" class="text-xs text-sky-400 hover:text-sky-300 font-bold flex items-center gap-1">
-                <span>🔊</span> <span>問題を聴く</span>
-              </button>
+          <div class="p-3 rounded-xl border border-transparent transition-all" :class="isSectionReading(currentDrillQuestion.id, 'question') ? 'reading-section-active' : ''">
+            <div class="flex items-center justify-between text-xs text-slate-400 pb-2 mb-2 border-b border-slate-800">
+              <div class="flex items-center gap-2">
+                <span>問題 {{ currentDrillIndex + 1 }} / {{ activeDrillQuestions.length }}</span>
+                <span v-if="isSectionReading(currentDrillQuestion.id, 'question')" class="bg-sky-500/20 text-sky-300 border border-sky-400/50 px-2 py-0.5 rounded-full text-[10px] font-bold animate-pulse">🗣️ 設問追従ハイライト中</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="bg-slate-800 text-sky-400 px-2 py-0.5 rounded">{{ currentDrillQuestion.chapterName }}</span>
+                <button @click="speakSingleQuestion(currentDrillQuestion)" class="text-xs text-sky-400 hover:text-sky-300 font-bold flex items-center gap-1">
+                  <span>🔊</span> <span>問題を聴く（追従）</span>
+                </button>
+              </div>
             </div>
-          </div>
 
-          <h3 class="text-base font-medium text-slate-100 leading-relaxed whitespace-pre-wrap">
-            {{ currentDrillQuestion.question }}
-          </h3>
+            <h3 class="text-base font-medium text-slate-100 leading-relaxed whitespace-pre-wrap" v-html="getTrackedHtml(currentDrillQuestion.question, currentDrillQuestion.id, 'question')">
+            </h3>
+          </div>
 
           <div class="space-y-2.5">
             <button 
@@ -887,22 +918,26 @@
                    :class="getDrillBadgeClass(idx)">
                 {{ idx + 1 }}
               </div>
-              <span class="flex-1 leading-relaxed">{{ option }}</span>
+              <span class="flex-1 leading-relaxed" v-html="getTrackedHtml(option, currentDrillQuestion.id, 'option-' + idx)"></span>
               
-              <template v-if="isGlobalCheatMode && !drillAnswered && idx === currentDrillQuestion.correctIndex">
-                <span class="text-emerald-400 font-bold text-xs shrink-0 self-center">✓ 正解(透視中)</span>
+              <template v-if="(isGlobalCheatMode || isAudioRevealing(currentDrillQuestion.id)) && !drillAnswered && idx === currentDrillQuestion.correctIndex">
+                <span class="text-emerald-400 font-bold text-xs shrink-0 self-center">✓ 正解</span>
               </template>
             </button>
           </div>
 
-          <div v-if="drillAnswered" class="space-y-3 pt-3 border-t border-slate-800">
+          <div v-if="drillAnswered || isAudioRevealing(currentDrillQuestion.id)" class="space-y-3 pt-3 border-t border-slate-800">
             <div class="flex items-center justify-between">
-              <span class="text-xs font-bold" :class="drillSelectedOption === currentDrillQuestion.correctIndex ? 'text-emerald-400' : 'text-rose-400'">
+              <span v-if="drillAnswered" class="text-xs font-bold" :class="drillSelectedOption === currentDrillQuestion.correctIndex ? 'text-emerald-400' : 'text-rose-400'">
                 {{ drillSelectedOption === currentDrillQuestion.correctIndex ? '🎉 正解！' : '💥 不正解' }}
+                （正解: 選択肢 {{ currentDrillQuestion.correctIndex + 1 }}）
+              </span>
+              <span v-else class="text-xs font-bold text-emerald-400">
+                🎧 音声解説連動表示中（正解: 選択肢 {{ currentDrillQuestion.correctIndex + 1 }}）
               </span>
               <div class="flex items-center gap-2">
                 <button @click="speakSingleExplanation(currentDrillQuestion)" class="text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1 font-bold">
-                  <span>🔊</span> <span>解説・罠を聴く</span>
+                  <span>🔊</span> <span>解説・罠を聴く（追従）</span>
                 </button>
                 <button @click="toggleBookmark(currentDrillQuestion)" class="text-xs px-2.5 py-1 rounded-lg border text-amber-300 border-amber-600/50 bg-amber-500/10">
                   {{ currentDrillQuestion.isBookmarked ? '★ 要復習マーク済' : '☆ 要復習に追加' }}
@@ -911,13 +946,19 @@
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-              <div class="bg-slate-950 p-3 rounded-xl border border-emerald-600/40">
-                <strong class="text-emerald-400 block mb-1">🟢 正解の論理:</strong>
-                <p class="text-slate-200 leading-relaxed">{{ currentDrillQuestion.explanation }}</p>
+              <div class="bg-slate-950 p-3 rounded-xl border border-emerald-600/40 transition-all" :class="isSectionReading(currentDrillQuestion.id, 'explanation') ? 'reading-section-active' : ''">
+                <strong class="text-emerald-400 block mb-1 flex items-center justify-between">
+                  <span>🟢 正解の論理:</span>
+                  <span v-if="isSectionReading(currentDrillQuestion.id, 'explanation')" class="text-[10px] bg-sky-500/20 text-sky-300 px-2 py-0.5 rounded-full animate-pulse">🗣️ 追従朗読中</span>
+                </strong>
+                <p class="text-slate-200 leading-relaxed" v-html="getTrackedHtml(currentDrillQuestion.explanation, currentDrillQuestion.id, 'explanation')"></p>
               </div>
-              <div class="bg-slate-950 p-3 rounded-xl border border-amber-600/40">
-                <strong class="text-amber-400 block mb-1">🚨 ここが引っ掛け罠:</strong>
-                <p class="text-amber-200/90 whitespace-pre-wrap leading-relaxed">{{ currentDrillQuestion.trapNote }}</p>
+              <div class="bg-slate-950 p-3 rounded-xl border border-amber-600/40 transition-all" :class="isSectionReading(currentDrillQuestion.id, 'trap') ? 'reading-trap-active' : ''">
+                <strong class="text-amber-400 block mb-1 flex items-center justify-between">
+                  <span>🚨 ここが引っ掛け罠:</span>
+                  <span v-if="isSectionReading(currentDrillQuestion.id, 'trap')" class="text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full animate-pulse">🗣️ 追従朗読中</span>
+                </strong>
+                <p class="text-amber-200/90 whitespace-pre-wrap leading-relaxed" v-html="getTrackedHtml(currentDrillQuestion.trapNote, currentDrillQuestion.id, 'trap')"></p>
               </div>
             </div>
 
@@ -972,8 +1013,7 @@
 
               <div class="my-auto py-6">
                 <span class="text-xs text-slate-400 font-bold block mb-1">【テーマ】 {{ currentFlashcard.title }}</span>
-                <h3 class="text-base md:text-lg font-bold text-white leading-relaxed">
-                  {{ currentFlashcard.question }}
+                <h3 class="text-base md:text-lg font-bold text-white leading-relaxed" v-html="getTrackedHtml(currentFlashcard.question, currentFlashcard.id, 'card-front')">
                 </h3>
               </div>
 
@@ -987,17 +1027,16 @@
             <div class="card-back bg-slate-900 border border-emerald-600/50 bg-gradient-to-br from-slate-900 via-slate-900 to-emerald-950/20">
               <div class="flex items-center justify-between">
                 <span class="text-xs bg-emerald-950 text-emerald-300 border border-emerald-800 px-2.5 py-0.5 rounded-full font-bold">正解・判定基準・解説</span>
-                <button @click.stop="speakText(currentFlashcard.title + '。' + currentFlashcard.answer)" class="text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1 font-bold">
-                  <span>🔊</span> <span>発音を聴く</span>
+                <button @click.stop="speakText(currentFlashcard.answer, currentFlashcard.id, 'card-back')" class="text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1 font-bold">
+                  <span>🔊</span> <span>発音を聴く（追従）</span>
                 </button>
               </div>
 
               <div class="my-auto py-4">
-                <div class="text-base md:text-lg font-bold text-emerald-300 mb-2 leading-relaxed whitespace-pre-wrap">
-                  {{ currentFlashcard.answer }}
+                <div class="text-base md:text-lg font-bold text-emerald-300 mb-2 leading-relaxed whitespace-pre-wrap" v-html="getTrackedHtml(currentFlashcard.answer, currentFlashcard.id, 'card-back')">
                 </div>
-                <div class="text-xs text-slate-300 bg-slate-950/70 p-3 rounded-xl border border-slate-800 leading-relaxed whitespace-pre-wrap">
-                  <strong class="text-amber-400">💡 重要ポイント:</strong> {{ currentFlashcard.point }}
+                <div class="text-xs text-slate-300 bg-slate-950/70 p-3 rounded-xl border border-slate-800 leading-relaxed whitespace-pre-wrap" :class="isSectionReading(currentFlashcard.id, 'card-point') ? 'reading-section-active' : ''">
+                  <strong class="text-amber-400">💡 重要ポイント:</strong> <span v-html="getTrackedHtml(currentFlashcard.point, currentFlashcard.id, 'card-point')"></span>
                 </div>
               </div>
 
@@ -1034,33 +1073,37 @@
 
 
       <!-- ============================================== -->
-      <!-- TAB 6: 🎧 専用の音声聞き流し学習プレイヤー -->
+      <!-- TAB 6: 🎧 専用の音声聞き流し＆文章追従プレイヤー -->
       <!-- ============================================== -->
-      <section v-if="activeTab === 'audio'" class="space-y-4 max-w-2xl mx-auto w-full py-4">
+      <section v-if="activeTab === 'audio'" class="space-y-4 max-w-3xl mx-auto w-full py-2">
         
-        <div class="text-center mb-4">
+        <div class="text-center mb-3">
           <div class="inline-block bg-indigo-950 text-indigo-300 border border-indigo-800 text-xs px-3 py-1 rounded-full font-bold mb-1">
-            🎧 ハンズフリー耳学
+            🎧 ハンズフリー耳学 × 🗣️ カラオケ式文章追従可視化
           </div>
-          <h2 class="text-lg md:text-xl font-bold text-white">全自動！音声聞き流し学習プレイヤー</h2>
-          <p class="text-xs text-slate-400">通勤中・歩行中・就寝前、画面を見ずに耳だけで重要知識を完全インプットできます。</p>
+          <h2 class="text-lg md:text-xl font-bold text-white">全自動！音声聞き流し＆リアルタイム文章追従プレイヤー</h2>
+          <p class="text-xs text-slate-400">読み上げている文節（問題・選択肢・正解の論理・引っ掛け罠）がリアルタイムで蛍光ハイライト追従されます。</p>
         </div>
 
         <!-- プレイヤーカード -->
-        <div class="bg-gradient-to-br from-slate-900 via-slate-900 to-indigo-950/40 border border-slate-800 rounded-2xl p-6 shadow-2xl relative overflow-hidden">
+        <div class="bg-gradient-to-br from-slate-900 via-slate-900 to-indigo-950/40 border border-slate-800 rounded-2xl p-5 md:p-6 shadow-2xl relative overflow-hidden space-y-4">
           
-          <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-800 flex-wrap gap-2">
-            <div>
-              <span class="text-[11px] text-slate-400">プレイリスト選択:</span>
+          <div class="flex items-center justify-between pb-3 border-b border-slate-800 flex-wrap gap-2">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="text-[11px] text-slate-400">プレイリスト:</span>
               <select @change="(e) => {
                 if (e.target.value === 'stages') listenAllUnlockedStages();
                 else if (e.target.value === 'flashcards') listenAllFlashcards();
-                else if (e.target.value === 'all') startAudioListening(allQuestions.slice(0, 150), '全問から150問通し聞き流し');
-              }" class="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1 text-xs text-slate-200 ml-2 focus:outline-none focus:border-sky-500">
+                else if (e.target.value === 'all') startAudioListening(allQuestions.slice(0, 150), '全問から150問通し聞き流し', 'audio', 0);
+              }" class="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1 text-xs text-slate-200 focus:outline-none focus:border-sky-500">
                 <option value="stages">🎯 段階ステップ特訓（180問）</option>
                 <option value="flashcards">🔢 重要数値・用語暗記カード（183枚）</option>
                 <option value="all">🌟 全2,310問から150問通し</option>
               </select>
+
+              <button @click="toggleReadOptions" class="px-2.5 py-1 rounded-lg border text-xs font-bold transition-all" :class="readOptionsInAudio ? 'bg-sky-950 text-sky-300 border-sky-700' : 'bg-slate-950 text-slate-400 border-slate-800'">
+                選択肢読上: {{ readOptionsInAudio ? 'ON' : 'OFF' }}
+              </button>
             </div>
 
             <!-- 再生速度切り替え -->
@@ -1075,32 +1118,94 @@
             </div>
           </div>
 
-          <!-- 再生中のテキスト表示エリア -->
-          <div class="min-h-[170px] flex flex-col justify-center text-center my-4">
-            <span class="text-xs font-mono text-sky-400 mb-1">
-              {{ globalAudioTitle }}
-            </span>
-            <span class="text-[11px] text-slate-500 font-mono mb-2">
-              TRACK {{ globalAudioIndex + 1 }} / {{ globalAudioPlaylist.length }}
-            </span>
-            
-            <h3 class="text-base md:text-lg font-bold text-white mb-3 leading-relaxed">
-              {{ currentGlobalAudioItem.title || currentGlobalAudioItem.question || '「再生ボタン」を押して開始してください' }}
-            </h3>
-
-            <!-- 状態表示バッジ -->
-            <div class="flex justify-center items-center gap-2">
-              <span v-if="globalAudioState === 'question'" class="bg-sky-950 text-sky-300 border border-sky-800 px-3 py-1 rounded-full text-xs font-bold animate-pulse">
-                🗣️ 設問を朗読中...
-              </span>
-              <span v-else-if="globalAudioState === 'thinking'" class="bg-amber-950 text-amber-300 border border-amber-800 px-3 py-1 rounded-full text-xs font-bold animate-pulse">
-                ⏳ 思考タイム（3秒後、正解・解説・罠を朗読）
-              </span>
-              <span v-else-if="globalAudioState === 'explanation'" class="bg-emerald-950 text-emerald-300 border border-emerald-800 px-3 py-1 rounded-full text-xs font-bold">
-                💡 正解・解説・引っ掛け罠を朗読中...
-              </span>
-              <span v-else class="text-xs text-slate-500">再生停止中</span>
+          <!-- ステータスヘッダー -->
+          <div class="flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <span class="text-xs font-mono text-sky-400 font-bold">{{ globalAudioTitle }}</span>
+              <span class="text-xs text-slate-500 font-mono ml-2">TRACK {{ globalAudioIndex + 1 }} / {{ globalAudioPlaylist.length || 0 }}</span>
             </div>
+
+            <div>
+              <span v-if="globalAudioState === 'question'" class="bg-sky-950 text-sky-300 border border-sky-700 px-3 py-1 rounded-full text-xs font-bold animate-pulse">
+                🗣️ 1/4 設問を朗読・追従中...
+              </span>
+              <span v-else-if="globalAudioState === 'options'" class="bg-indigo-950 text-indigo-300 border border-indigo-700 px-3 py-1 rounded-full text-xs font-bold animate-pulse">
+                🔢 2/4 選択肢を朗読・追従中...
+              </span>
+              <span v-else-if="globalAudioState === 'thinking'" class="bg-amber-950 text-amber-300 border border-amber-600 px-3 py-1 rounded-full text-xs font-bold animate-pulse">
+                ⏳ 3/4 シンキングタイム（残り {{ thinkingCountdown }} 秒）
+              </span>
+              <span v-else-if="globalAudioState === 'explanation'" class="bg-emerald-950 text-emerald-300 border border-emerald-700 px-3 py-1 rounded-full text-xs font-bold">
+                🟢 4/4 正解の論理（解説）を追従朗読中...
+              </span>
+              <span v-else-if="globalAudioState === 'trap'" class="bg-amber-950 text-amber-300 border border-amber-600 px-3 py-1 rounded-full text-xs font-bold">
+                🚨 4/4 ここが引っ掛け罠！を追従朗読中...
+              </span>
+              <span v-else class="text-xs text-slate-500">⏹️ 待機中（下の▶️ボタンでスタート）</span>
+            </div>
+          </div>
+
+          <!-- 設問表示ボックス（カラオケ式ハイライト） -->
+          <div v-if="currentGlobalAudioItem.question || currentGlobalAudioItem.title" class="space-y-4">
+            <div class="bg-slate-950/90 border border-slate-800 rounded-xl p-4 transition-all"
+                 :class="(isSectionReading(currentGlobalAudioItem.id, 'question') || isSectionReading(currentGlobalAudioItem.id, 'card-front')) ? 'reading-section-active' : ''">
+              <div class="flex items-center justify-between text-xs text-slate-400 mb-1.5">
+                <span class="font-bold text-sky-400">{{ currentGlobalAudioItem.chapterName || currentGlobalAudioItem.category || '問題' }}</span>
+                <span v-if="currentGlobalAudioItem.title" class="text-amber-300 font-bold">【{{ currentGlobalAudioItem.title }}】</span>
+              </div>
+              <h3 class="text-sm md:text-base font-bold text-white leading-relaxed whitespace-pre-wrap"
+                  v-html="getTrackedHtml(currentGlobalAudioItem.question, currentGlobalAudioItem.id, currentGlobalAudioItem.options ? 'question' : 'card-front')">
+              </h3>
+            </div>
+
+            <!-- 4択選択肢リスト（カラオケ式追従＆正答ハイライト） -->
+            <div v-if="currentGlobalAudioItem.options && currentGlobalAudioItem.options.length > 0" class="space-y-2">
+              <div v-for="(opt, idx) in currentGlobalAudioItem.options" :key="idx"
+                   class="p-3 rounded-xl border text-xs md:text-sm flex items-start gap-3 transition-all"
+                   :class="[
+                     isSectionReading(currentGlobalAudioItem.id, 'option-' + idx) ? 'reading-section-active' : '',
+                     ((isGlobalCheatMode || isAudioRevealing(currentGlobalAudioItem.id)) && idx === currentGlobalAudioItem.correctIndex)
+                       ? 'bg-emerald-950/50 border-emerald-500 text-emerald-200 ring-2 ring-emerald-500/60 font-bold'
+                       : 'bg-slate-950/80 border-slate-800 text-slate-300'
+                   ]">
+                <span class="w-5 h-5 rounded flex items-center justify-center text-xs font-bold shrink-0 border"
+                      :class="((isGlobalCheatMode || isAudioRevealing(currentGlobalAudioItem.id)) && idx === currentGlobalAudioItem.correctIndex) ? 'bg-emerald-500 text-slate-950 border-emerald-400' : 'bg-slate-900 text-slate-400 border-slate-700'">
+                  {{ idx + 1 }}
+                </span>
+                <span class="flex-1 leading-relaxed" v-html="getTrackedHtml(opt, currentGlobalAudioItem.id, 'option-' + idx)"></span>
+                <span v-if="(isGlobalCheatMode || isAudioRevealing(currentGlobalAudioItem.id)) && idx === currentGlobalAudioItem.correctIndex" class="text-emerald-400 font-bold text-xs shrink-0 self-center">
+                  ✓ 正解
+                </span>
+              </div>
+            </div>
+
+            <!-- 解説・引っ掛け罠ボックス（カラオケ式追従） -->
+            <div v-if="isGlobalCheatMode || isAudioRevealing(currentGlobalAudioItem.id) || globalAudioState === 'explanation' || globalAudioState === 'trap'" class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs pt-2">
+              <template v-if="currentGlobalAudioItem.options">
+                <div class="bg-slate-950 p-3.5 rounded-xl border border-emerald-600/40 transition-all" :class="isSectionReading(currentGlobalAudioItem.id, 'explanation') ? 'reading-section-active' : ''">
+                  <strong class="text-emerald-400 block mb-1">🟢 正解の論理（正解: {{ currentGlobalAudioItem.correctIndex + 1 }}番）:</strong>
+                  <p class="text-slate-200 leading-relaxed" v-html="getTrackedHtml(currentGlobalAudioItem.explanation, currentGlobalAudioItem.id, 'explanation')"></p>
+                </div>
+                <div class="bg-slate-950 p-3.5 rounded-xl border border-amber-600/40 transition-all" :class="isSectionReading(currentGlobalAudioItem.id, 'trap') ? 'reading-trap-active' : ''">
+                  <strong class="text-amber-400 block mb-1">🚨 ここが引っ掛け罠！:</strong>
+                  <p class="text-amber-200/90 whitespace-pre-wrap leading-relaxed" v-html="getTrackedHtml(currentGlobalAudioItem.trapNote, currentGlobalAudioItem.id, 'trap')"></p>
+                </div>
+              </template>
+              <template v-else>
+                <div class="bg-slate-950 p-3.5 rounded-xl border border-emerald-600/40 transition-all" :class="isSectionReading(currentGlobalAudioItem.id, 'card-back') ? 'reading-section-active' : ''">
+                  <strong class="text-emerald-400 block mb-1">🟢 正解・判定基準:</strong>
+                  <p class="text-emerald-200 font-bold leading-relaxed" v-html="getTrackedHtml(currentGlobalAudioItem.answer, currentGlobalAudioItem.id, 'card-back')"></p>
+                </div>
+                <div class="bg-slate-950 p-3.5 rounded-xl border border-amber-600/40 transition-all" :class="isSectionReading(currentGlobalAudioItem.id, 'card-point') ? 'reading-trap-active' : ''">
+                  <strong class="text-amber-400 block mb-1">💡 重要ポイント:</strong>
+                  <p class="text-amber-200/90 leading-relaxed" v-html="getTrackedHtml(currentGlobalAudioItem.point, currentGlobalAudioItem.id, 'card-point')"></p>
+                </div>
+              </template>
+            </div>
+          </div>
+
+          <div v-else class="min-h-[140px] flex flex-col items-center justify-center text-center text-slate-400 text-sm">
+            下の「▶️」ボタンを押すと、問題・選択肢・3秒思考タイム・解説・引っ掛け罠の自動追従読み上げがスタートします。
           </div>
 
           <!-- 再生コントロールバー -->
@@ -1139,7 +1244,7 @@
                 <span>🚨</span> 罠・引っ掛け特化チートシート ({{ totalQuestionsCount }}問)
               </h2>
               <p class="text-xs text-slate-400 mt-1">
-                全問題の「引っ掛けポイント」「出題者の罠」を抽出して一覧化。試験直前の総ざらいや本番中の辞書として活用できます。
+                全問題の「引っ掛けポイント」「出題者の罠」を抽出して一覧化。音声読み上げ時は該当箇所がリアルタイムでハイライト追従されます。
               </p>
             </div>
             
@@ -1176,33 +1281,38 @@
           <div 
             v-for="q in paginatedCheatQuestions" 
             :key="q.id"
-            class="bg-slate-900 border border-slate-800 hover:border-amber-500/50 rounded-xl p-4 transition-all flex flex-col justify-between space-y-3">
+            class="bg-slate-900 border border-slate-800 hover:border-amber-500/50 rounded-xl p-4 transition-all flex flex-col justify-between space-y-3"
+            :class="readingItemId === q.id ? 'reading-section-active' : ''">
             
             <div>
               <div class="flex items-center justify-between gap-2 mb-2">
                 <span class="text-[11px] bg-slate-800 text-sky-400 px-2 py-0.5 rounded-full font-medium">{{ q.chapterName || q.category }}</span>
                 <div class="flex items-center gap-2">
                   <span class="text-[11px] font-mono text-emerald-400 font-bold">正解: {{ q.correctIndex + 1 }}</span>
-                  <button @click="speakSingleExplanation(q)" class="text-[11px] text-sky-400 hover:text-sky-300 font-bold flex items-center gap-0.5">
-                    <span>🔊</span> <span>聴く</span>
+                  <button @click="speakSingleQuestion(q)" class="text-[11px] text-sky-400 hover:text-sky-300 font-bold flex items-center gap-0.5">
+                    <span>🔊</span> <span>設問</span>
+                  </button>
+                  <button @click="speakSingleExplanation(q)" class="text-[11px] text-amber-400 hover:text-amber-300 font-bold flex items-center gap-0.5">
+                    <span>🔊</span> <span>解説・罠</span>
                   </button>
                 </div>
               </div>
               
-              <h4 class="text-xs font-semibold text-slate-200 line-clamp-2 mb-2">
-                {{ q.question }}
+              <h4 class="text-xs font-semibold text-slate-200 mb-2 leading-relaxed" v-html="getTrackedHtml(q.question, q.id, 'question')">
               </h4>
 
-              <div class="bg-amber-950/30 border border-amber-600/40 rounded-lg p-3 text-xs text-amber-200 leading-relaxed whitespace-pre-wrap select-text">
+              <div class="bg-amber-950/30 border border-amber-600/40 rounded-lg p-3 text-xs text-amber-200 leading-relaxed whitespace-pre-wrap select-text transition-all"
+                   :class="isSectionReading(q.id, 'trap') ? 'reading-trap-active' : ''">
                 <div class="font-bold text-amber-400 mb-1 flex items-center gap-1">
                   <span>🚨</span> 罠・引っ掛け要点:
                 </div>
-                {{ q.trapNote }}
+                <span v-html="getTrackedHtml(q.trapNote, q.id, 'trap')"></span>
               </div>
             </div>
 
-            <div class="text-[11px] text-slate-400 border-t border-slate-800 pt-2">
-              <strong class="text-emerald-400">正解の根拠:</strong> {{ q.explanation }}
+            <div class="text-[11px] text-slate-300 border-t border-slate-800 pt-2 leading-relaxed transition-all rounded p-1"
+                 :class="isSectionReading(q.id, 'explanation') ? 'reading-section-active' : ''">
+              <strong class="text-emerald-400">正解の根拠:</strong> <span v-html="getTrackedHtml(q.explanation, q.id, 'explanation')"></span>
             </div>
 
           </div>
@@ -1242,79 +1352,94 @@
 
     </main>
 
-    <!-- 🎧 フローティング聞き流しプレイヤーバー（画面最下部に常駐） -->
-    <div v-if="isGlobalAudioActive" class="fixed bottom-0 left-0 right-0 z-50 bg-slate-900/95 border-t border-sky-500/50 backdrop-blur-md px-4 py-3 shadow-2xl flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+    <!-- 🎧 フローティング聞き流し＆リアルタイム字幕バー（画面最下部に常駐） -->
+    <div v-if="isGlobalAudioActive || readingLiveSubtitle" class="fixed bottom-0 left-0 right-0 z-50 bg-slate-900/95 border-t-2 border-amber-400/70 backdrop-blur-md px-4 py-2.5 shadow-2xl flex flex-col gap-1.5 text-xs">
       
-      <!-- 再生情報 -->
-      <div class="flex items-center gap-3 overflow-hidden w-full sm:w-auto">
-        <span class="text-xl">🎧</span>
-        <div class="truncate">
-          <div class="flex items-center gap-2">
-            <span class="font-mono font-bold text-sky-400">TRACK {{ globalAudioIndex + 1 }}/{{ globalAudioPlaylist.length }}</span>
-            <span class="text-slate-400 truncate">[{{ globalAudioTitle }}]</span>
-          </div>
-          <div class="font-medium text-white truncate max-w-md">
-            {{ currentGlobalAudioItem.title || currentGlobalAudioItem.question }}
+      <!-- リアルタイム追従字幕バー -->
+      <div v-if="readingLiveSubtitle" class="bg-slate-950/90 border border-amber-500/40 rounded-lg px-3 py-1.5 flex items-center gap-2 text-amber-200 font-bold">
+        <span class="bg-amber-500 text-slate-950 text-[10px] font-extrabold px-1.5 py-0.5 rounded shrink-0">🗣️ 追従中</span>
+        <span class="truncate text-white">{{ readingLiveSubtitle }}</span>
+      </div>
+
+      <div class="flex flex-col sm:flex-row items-center justify-between gap-2">
+        <!-- 再生情報 -->
+        <div class="flex items-center gap-2.5 overflow-hidden w-full sm:w-auto">
+          <span class="text-lg">🎧</span>
+          <div class="truncate">
+            <div class="flex items-center gap-2">
+              <span v-if="isGlobalAudioActive" class="font-mono font-bold text-sky-400">TRACK {{ globalAudioIndex + 1 }}/{{ globalAudioPlaylist.length }}</span>
+              <span class="text-slate-400 truncate">[{{ globalAudioTitle }}]</span>
+            </div>
           </div>
         </div>
-      </div>
 
-      <!-- 状態バッジ -->
-      <div class="flex items-center gap-2 shrink-0">
-        <span v-if="globalAudioState === 'question'" class="bg-sky-950 text-sky-300 border border-sky-800 px-2.5 py-0.5 rounded-full text-[11px] font-bold animate-pulse">
-          🗣️ 設問朗読中
-        </span>
-        <span v-else-if="globalAudioState === 'thinking'" class="bg-amber-950 text-amber-300 border border-amber-800 px-2.5 py-0.5 rounded-full text-[11px] font-bold animate-pulse">
-          ⏳ 思考タイム (3s)
-        </span>
-        <span v-else-if="globalAudioState === 'explanation'" class="bg-emerald-950 text-emerald-300 border border-emerald-800 px-2.5 py-0.5 rounded-full text-[11px] font-bold">
-          💡 正解・解説・罠を朗読中
-        </span>
-      </div>
+        <!-- 状態バッジ -->
+        <div class="flex items-center gap-2 shrink-0">
+          <span v-if="globalAudioState === 'question'" class="bg-sky-950 text-sky-300 border border-sky-700 px-2.5 py-0.5 rounded-full text-[11px] font-bold animate-pulse">
+            🗣️ 設問追従中
+          </span>
+          <span v-else-if="globalAudioState === 'options'" class="bg-indigo-950 text-indigo-300 border border-indigo-700 px-2.5 py-0.5 rounded-full text-[11px] font-bold animate-pulse">
+            🔢 選択肢追従中
+          </span>
+          <span v-else-if="globalAudioState === 'thinking'" class="bg-amber-950 text-amber-300 border border-amber-600 px-2.5 py-0.5 rounded-full text-[11px] font-bold animate-pulse">
+            ⏳ 思考タイム ({{ thinkingCountdown }}s)
+          </span>
+          <span v-else-if="globalAudioState === 'explanation'" class="bg-emerald-950 text-emerald-300 border border-emerald-700 px-2.5 py-0.5 rounded-full text-[11px] font-bold">
+            🟢 正解・解説追従中
+          </span>
+          <span v-else-if="globalAudioState === 'trap'" class="bg-amber-950 text-amber-300 border border-amber-600 px-2.5 py-0.5 rounded-full text-[11px] font-bold">
+            🚨 引っ掛け罠追従中
+          </span>
+        </div>
 
-      <!-- 再生コントロール -->
-      <div class="flex items-center gap-2 shrink-0">
-        <button @click="prevGlobalAudio" class="p-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-300" title="前へ">
-          ⏮️
-        </button>
+        <!-- 再生コントロール -->
+        <div class="flex items-center gap-1.5 shrink-0">
+          <button @click="toggleReadOptions" class="px-2 py-1 rounded-lg border text-[10px] font-bold" :class="readOptionsInAudio ? 'bg-sky-950 text-sky-300 border-sky-700' : 'bg-slate-800 text-slate-400 border-slate-700'" title="選択肢1〜4の読み上げON/OFF">
+            選択肢:{{ readOptionsInAudio ? 'ON' : 'OFF' }}
+          </button>
 
-        <button @click="toggleGlobalAudioPlay" class="px-3 py-1.5 bg-sky-600 hover:bg-sky-500 text-white rounded-lg font-bold shadow flex items-center gap-1">
-          <span>{{ isGlobalAudioPlaying ? '⏸️ 一時停止' : '▶️ 再開' }}</span>
-        </button>
+          <button v-if="isGlobalAudioActive" @click="prevGlobalAudio" class="p-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-300" title="前へ">
+            ⏮️
+          </button>
 
-        <button @click="nextGlobalAudio" class="p-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-300" title="次へ">
-          ⏭️
-        </button>
+          <button v-if="isGlobalAudioActive" @click="toggleGlobalAudioPlay" class="px-3 py-1.5 bg-sky-600 hover:bg-sky-500 text-white rounded-lg font-bold shadow flex items-center gap-1">
+            <span>{{ isGlobalAudioPlaying ? '⏸️ 一時停止' : '▶️ 再開' }}</span>
+          </button>
 
-        <!-- 速度 -->
-        <button @click="setGlobalAudioSpeed(globalAudioSpeed === 1.0 ? 1.2 : globalAudioSpeed === 1.2 ? 1.5 : 1.0)" 
-                class="bg-slate-800 border border-slate-700 px-2 py-1 rounded-lg text-slate-300 font-mono text-[11px]">
-          {{ globalAudioSpeed }}x
-        </button>
+          <button v-if="isGlobalAudioActive" @click="nextGlobalAudio" class="p-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-300" title="次へ">
+            ⏭️
+          </button>
 
-        <!-- 閉じる -->
-        <button @click="stopGlobalAudio" class="text-slate-400 hover:text-white p-1 ml-1" title="停止してバーを閉じる">
-          ✕
-        </button>
+          <!-- 速度 -->
+          <button @click="setGlobalAudioSpeed(globalAudioSpeed === 1.0 ? 1.2 : globalAudioSpeed === 1.2 ? 1.5 : 1.0)" 
+                  class="bg-slate-800 border border-slate-700 px-2 py-1 rounded-lg text-slate-300 font-mono text-[11px]">
+            {{ globalAudioSpeed }}x
+          </button>
+
+          <!-- 閉じる -->
+          <button @click="stopGlobalAudio" class="text-slate-400 hover:text-white p-1 ml-1" title="停止してバーを閉じる">
+            ✕
+          </button>
+        </div>
       </div>
 
     </div>
 
     <!-- フッター -->
     <footer class="mt-8 pt-4 border-t border-slate-800/80 text-center text-xs text-slate-500">
-      <p>G検定 絶対合格プログラム v5.1 | 2,310問バンク × 全モード聞き流し × 正解＆引っ掛け罠解説 × チート透視 | 完全オフラインPWA</p>
+      <p>G検定 絶対合格プログラム v5.1 (文章追従ハイライト完全対応) | 2,310問バンク × 全モード聞き流し × 正解＆引っ掛け罠解説 × チート透視 | 完全オフラインPWA</p>
     </footer>
 
   </div>
 
-  <script src="app.js?v=5.1"></script>
+  <script src="app.js?v=5.2"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./service-worker.js?v=5.1')
+        navigator.serviceWorker.register('./service-worker.js?v=5.2')
           .then((reg) => {
             reg.update();
-            console.log('[PWA v5.1] Service Worker registered successfully!', reg.scope);
+            console.log('[PWA v5.2] Service Worker registered successfully!', reg.scope);
           })
           .catch((err) => {
             console.warn('[PWA] Service Worker registration failed:', err);

@@ -1,4 +1,4 @@
-const { createApp, ref, computed, onMounted, onUnmounted, watch } = Vue;
+const { createApp, ref, computed, onMounted, onUnmounted, watch, nextTick } = Vue;
 
 const DB_NAME = 'GKenteiQuestionDB_v2';
 const DB_VERSION = 1;
@@ -41,6 +41,90 @@ async function saveAllToDB(items) {
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
+}
+
+// HTMLエスケープヘルパー
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+// 音声テキスト分割ユーティリティ（カラオケ式ハイライト＆TTSタイムアウト防止）
+function splitSpeechText(text) {
+  if (!text) return [];
+  const rawParts = String(text).split(/([。！？\n]+)/);
+  const sentences = [];
+  let current = '';
+
+  for (let i = 0; i < rawParts.length; i++) {
+    const part = rawParts[i];
+    if (!part) continue;
+    if (/[。！？\n]+/.test(part)) {
+      current += part;
+      if (current.trim()) {
+        sentences.push(current.trim());
+      }
+      current = '';
+    } else {
+      current += part;
+    }
+  }
+  if (current.trim()) {
+    sentences.push(current.trim());
+  }
+
+  // 1文が長い場合（55文字超）は読点でも分割して視認性と追従性を向上
+  const finalChunks = [];
+  sentences.forEach((s) => {
+    if (s.length > 55) {
+      const subParts = s.split(/([、，]+)/);
+      let subCurrent = '';
+      for (let j = 0; j < subParts.length; j++) {
+        const sp = subParts[j];
+        if (!sp) continue;
+        if (/[、，]+/.test(sp)) {
+          subCurrent += sp;
+          if (subCurrent.length > 28) {
+            finalChunks.push(subCurrent.trim());
+            subCurrent = '';
+          }
+        } else {
+          subCurrent += sp;
+        }
+      }
+      if (subCurrent.trim()) finalChunks.push(subCurrent.trim());
+    } else {
+      finalChunks.push(s);
+    }
+  });
+
+  return finalChunks.length > 0 ? finalChunks : [String(text)];
+}
+
+// G検定専門用語の音声発音補正（画面表示は元の漢字・英字を維持）
+function sanitizeForSpeech(text) {
+  if (!text) return '';
+  return String(text)
+    .replace(/ＡＩ/g, 'エーアイ')
+    .replace(/(?<![a-zA-Z])AI(?![a-zA-Z])/g, 'エーアイ')
+    .replace(/(?<![a-zA-Z])F値(?![a-zA-Z])/g, 'エフち')
+    .replace(/(?<![a-zA-Z])p値(?![a-zA-Z])/g, 'ピーち')
+    .replace(/(?<![a-zA-Z])Q値(?![a-zA-Z])/g, 'キューち')
+    .replace(/(?<![a-zA-Z])Q学習(?![a-zA-Z])/g, 'キューがくしゅう')
+    .replace(/k近傍法/gi, 'ケーきんぼうほう')
+    .replace(/k-means/gi, 'ケーミーンズ')
+    .replace(/L1正則化/g, 'エルワンせいそくか')
+    .replace(/L2正則化/g, 'エルツーせいそくか')
+    .replace(/30条の4/g, 'さんじゅうじょうのよん')
+    .replace(/IoU/g, 'アイオーユー')
+    .replace(/RLHF/g, 'アールエルエイチエフ')
+    .replace(/LoRA/g, 'ローラ')
+    .replace(/[🟢🚨💡🎯⏱️⚡🧠🏆📚🔢🎧👀⭐✓✕]/g, '');
 }
 
 createApp({
@@ -137,7 +221,7 @@ createApp({
     const bookmarkedQuestionsCount = computed(() => allQuestions.value.filter(q => q.isBookmarked).length);
 
     // ==========================================
-    // 🎧 全モード共通！グローバル音声聞き流しエンジン
+    // 🎧 全モード共通！グローバル音声聞き流し＆文章追従エンジン
     // ==========================================
     const isGlobalAudioActive = ref(false);
     const isGlobalAudioPlaying = ref(false);
@@ -145,28 +229,218 @@ createApp({
     const globalAudioTitle = ref('全自動聞き流し学習');
     const globalAudioPlaylist = ref([]);
     const globalAudioIndex = ref(0);
-    const globalAudioState = ref('idle'); // 'idle' | 'question' | 'thinking' | 'explanation'
+    const globalAudioState = ref('idle'); // 'idle' | 'question' | 'options' | 'thinking' | 'explanation' | 'trap'
+    const readOptionsInAudio = ref(localStorage.getItem('gkentei_read_opts') !== 'false');
+    const thinkingCountdown = ref(3);
+    const audioSourceMode = ref(''); // 'stage' | 'exam' | 'drill' | 'flashcards' | 'cheatsheet' | 'audio'
+
+    // 🗣️ 文章追従（カラオケ式ハイライト）状態
+    const readingItemId = ref(null);
+    const readingSection = ref(''); // 'question' | 'option-0'..'option-3' | 'explanation' | 'trap' | 'card-front' | 'card-back' | 'card-point'
+    const readingChunkIndex = ref(-1);
+    const readingLiveSubtitle = ref('');
+
     let globalAudioTimer = null;
+    let thinkingInterval = null;
+    let watchdogTimer = null;
+    let activeUtterance = null;
+    let audioSessionCounter = 0;
 
     const currentGlobalAudioItem = computed(() => {
       if (globalAudioPlaylist.value.length === 0) return {};
       return globalAudioPlaylist.value[globalAudioIndex.value] || {};
     });
 
-    const speakUtterance = (text, callback) => {
+    const toggleReadOptions = () => {
+      readOptionsInAudio.value = !readOptionsInAudio.value;
+      localStorage.setItem('gkentei_read_opts', String(readOptionsInAudio.value));
+    };
+
+    // 自動スクロール追従（現在読み上げ中の文節を画面中央へスムーズに収める）
+    const scrollToActiveChunk = () => {
+      nextTick(() => {
+        const activeEl = document.querySelector('[data-active-chunk="true"]') || document.querySelector('.reading-section-active') || document.querySelector('.reading-trap-active');
+        if (!activeEl) return;
+        try {
+          const rect = activeEl.getBoundingClientRect();
+          const vh = window.innerHeight || document.documentElement.clientHeight;
+          const isInComfortZone = rect.top >= 90 && rect.bottom <= vh - 120;
+          if (!isInComfortZone) {
+            activeEl.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+          }
+        } catch (e) {}
+      });
+    };
+
+    // カラオケ式ハイライトHTML生成ヘルパー（全モード共通）
+    const getTrackedHtml = (text, itemId, sectionName) => {
+      if (!text) return '';
+      const chunks = splitSpeechText(text);
+      const isTarget = readingItemId.value !== null && readingItemId.value === itemId && readingSection.value === sectionName;
+
+      return chunks.map((chunk, idx) => {
+        const escaped = escapeHtml(chunk).replace(/\n/g, '<br>');
+        if (isTarget) {
+          if (idx === readingChunkIndex.value) {
+            return `<span class="speech-chunk active" data-active-chunk="true">${escaped}</span>`;
+          } else if (idx < readingChunkIndex.value) {
+            return `<span class="speech-chunk spoken">${escaped}</span>`;
+          }
+        }
+        return `<span class="speech-chunk">${escaped}</span>`;
+      }).join(' ');
+    };
+
+    const isSectionReading = (itemId, sectionName) => {
+      return readingItemId.value !== null && readingItemId.value === itemId && readingSection.value === sectionName;
+    };
+
+    const isAudioRevealing = (itemId) => {
+      if (readingItemId.value === null || readingItemId.value !== itemId) return false;
+      return (
+        globalAudioState.value === 'explanation' ||
+        globalAudioState.value === 'trap' ||
+        readingSection.value === 'explanation' ||
+        readingSection.value === 'trap'
+      );
+    };
+
+    const clearReadingTracking = () => {
+      readingItemId.value = null;
+      readingSection.value = '';
+      readingChunkIndex.value = -1;
+      readingLiveSubtitle.value = '';
+    };
+
+    const cancelAllAudioTimers = () => {
+      audioSessionCounter++;
+      clearTimeout(globalAudioTimer);
+      clearInterval(thinkingInterval);
+      clearTimeout(watchdogTimer);
+      if (activeUtterance) {
+        activeUtterance.onend = null;
+        activeUtterance.onerror = null;
+        activeUtterance = null;
+      }
+      if ('speechSynthesis' in window) {
+        try {
+          window.speechSynthesis.cancel();
+        } catch (e) {}
+      }
+    };
+
+    // 1文チャンクを安全に発話（GC保護・ウォッチドッグ完備）
+    const speakAtomicChunk = (rawChunk, prefixSpeech, session, onDone) => {
+      if (session !== audioSessionCounter) return;
       if (!('speechSynthesis' in window)) {
-        if (callback) callback();
+        globalAudioTimer = setTimeout(() => {
+          if (session === audioSessionCounter && onDone) onDone();
+        }, 1200);
         return;
       }
-      window.speechSynthesis.cancel();
-      const ut = new SpeechSynthesisUtterance(text);
-      ut.lang = 'ja-JP';
-      ut.rate = globalAudioSpeed.value;
-      if (callback) {
-        ut.onend = () => callback();
-        ut.onerror = () => callback();
+
+      try {
+        window.speechSynthesis.cancel();
+      } catch (e) {}
+
+      globalAudioTimer = setTimeout(() => {
+        if (session !== audioSessionCounter) return;
+
+        const fullSpeech = sanitizeForSpeech((prefixSpeech ? prefixSpeech + '。' : '') + rawChunk);
+        const ut = new SpeechSynthesisUtterance(fullSpeech);
+        activeUtterance = ut;
+        ut.lang = 'ja-JP';
+        ut.rate = globalAudioSpeed.value;
+
+        let finished = false;
+        const complete = () => {
+          if (finished) return;
+          finished = true;
+          clearTimeout(watchdogTimer);
+          activeUtterance = null;
+          if (session === audioSessionCounter && onDone) {
+            onDone();
+          }
+        };
+
+        ut.onend = complete;
+        ut.onerror = () => complete();
+
+        const safeMs = Math.max(3800, Math.round((fullSpeech.length * 290) / globalAudioSpeed.value));
+        watchdogTimer = setTimeout(complete, safeMs);
+
+        try {
+          window.speechSynthesis.speak(ut);
+        } catch (err) {
+          complete();
+        }
+      }, 45);
+    };
+
+    // 対象セクションの文章をチャンクごとにハイライト追従しながら読み上げ
+    const speakSectionWithTracking = (text, itemId, sectionName, firstChunkPrefix, session, onComplete) => {
+      if (session !== audioSessionCounter) return;
+      const chunks = splitSpeechText(text);
+      if (chunks.length === 0) {
+        if (onComplete) onComplete();
+        return;
       }
-      window.speechSynthesis.speak(ut);
+
+      readingItemId.value = itemId;
+      readingSection.value = sectionName;
+      let idx = 0;
+
+      const nextChunk = () => {
+        if (session !== audioSessionCounter) return;
+        if (idx >= chunks.length) {
+          if (onComplete) onComplete();
+          return;
+        }
+
+        readingChunkIndex.value = idx;
+        readingLiveSubtitle.value = chunks[idx];
+        scrollToActiveChunk();
+
+        const prefix = idx === 0 ? firstChunkPrefix : '';
+        const chunkText = chunks[idx];
+        idx++;
+
+        speakAtomicChunk(chunkText, prefix, session, () => {
+          nextChunk();
+        });
+      };
+
+      nextChunk();
+    };
+
+    // 現在のトラックに合わせて各モードの画面表示インデックスを自動同期
+    const syncScreenWithAudioTrack = () => {
+      const idx = globalAudioIndex.value;
+      const item = currentGlobalAudioItem.value;
+      if (!item) return;
+
+      if (audioSourceMode.value === 'stage' && isStagePlaying.value) {
+        if (idx >= 0 && idx < stageQuestions.value.length) {
+          stagePlayQuestionIndex.value = idx;
+          stageSelectedOption.value = null;
+          stageAnswered.value = false;
+        }
+      } else if (audioSourceMode.value === 'exam' && isExamStarted.value && !isExamFinished.value) {
+        if (idx >= 0 && idx < examQuestions.value.length) {
+          currentExamIndex.value = idx;
+        }
+      } else if (audioSourceMode.value === 'drill') {
+        if (idx >= 0 && idx < activeDrillQuestions.value.length) {
+          currentDrillIndex.value = idx;
+          drillSelectedOption.value = null;
+          drillAnswered.value = false;
+        }
+      } else if (audioSourceMode.value === 'flashcards') {
+        if (idx >= 0 && idx < flashcards.value.length) {
+          currentCardIndex.value = idx;
+          isCardFlipped.value = false;
+        }
+      }
     };
 
     const runGlobalAudioSequence = () => {
@@ -177,56 +451,190 @@ createApp({
         return;
       }
 
-      globalAudioState.value = 'question';
-      let qText = '';
-      if (item.answer && item.title) {
-        // フラッシュカード形式
-        qText = `テーマ、${item.title}。${item.question}`;
-      } else {
-        // 問題形式
-        qText = `第${globalAudioIndex.value + 1}問。${item.question}`;
+      cancelAllAudioTimers();
+      const session = audioSessionCounter;
+      syncScreenWithAudioTrack();
+
+      const itemId = item.id !== undefined ? item.id : `idx-${globalAudioIndex.value}`;
+
+      // フラッシュカード形式の場合
+      if (item.answer && item.title && !item.options) {
+        globalAudioState.value = 'question';
+        isCardFlipped.value = false;
+
+        speakSectionWithTracking(
+          item.question,
+          itemId,
+          'card-front',
+          `カード${globalAudioIndex.value + 1}。テーマ、${item.title}`,
+          session,
+          () => {
+            if (session !== audioSessionCounter || !isGlobalAudioPlaying.value) return;
+            // 3秒シンキングタイム
+            globalAudioState.value = 'thinking';
+            clearReadingTracking();
+            thinkingCountdown.value = 3;
+
+            thinkingInterval = setInterval(() => {
+              if (thinkingCountdown.value > 1) thinkingCountdown.value--;
+            }, 1000);
+
+            globalAudioTimer = setTimeout(() => {
+              clearInterval(thinkingInterval);
+              if (session !== audioSessionCounter || !isGlobalAudioPlaying.value) return;
+
+              globalAudioState.value = 'explanation';
+              isCardFlipped.value = true;
+
+              speakSectionWithTracking(
+                item.answer,
+                itemId,
+                'card-back',
+                '正解・判定基準',
+                session,
+                () => {
+                  if (session !== audioSessionCounter || !isGlobalAudioPlaying.value) return;
+                  speakSectionWithTracking(
+                    item.point || '',
+                    itemId,
+                    'card-point',
+                    '重要ポイント',
+                    session,
+                    () => {
+                      if (session !== audioSessionCounter || !isGlobalAudioPlaying.value) return;
+                      clearReadingTracking();
+                      globalAudioTimer = setTimeout(() => {
+                        if (session === audioSessionCounter && isGlobalAudioPlaying.value) {
+                          nextGlobalAudio();
+                        }
+                      }, 1800);
+                    }
+                  );
+                }
+              );
+            }, 3000);
+          }
+        );
+        return;
       }
 
-      speakUtterance(qText, () => {
-        if (!isGlobalAudioPlaying.value) return;
-        globalAudioState.value = 'thinking';
+      // 4択問題形式の場合：
+      // Step 1: 問題文の読み上げ＆カラオケ追従
+      globalAudioState.value = 'question';
+      speakSectionWithTracking(
+        item.question,
+        itemId,
+        'question',
+        `第${globalAudioIndex.value + 1}問`,
+        session,
+        () => {
+          if (session !== audioSessionCounter || !isGlobalAudioPlaying.value) return;
 
-        // 3秒間の思考タイム
-        globalAudioTimer = setTimeout(() => {
-          if (!isGlobalAudioPlaying.value) return;
-          globalAudioState.value = 'explanation';
+          // Step 2: 選択肢1〜4の読み上げ＆カラオケ追従（ONの場合）
+          const readChoicesStep = (afterChoicesCallback) => {
+            const opts = item.options || [];
+            if (!readOptionsInAudio.value || opts.length === 0) {
+              afterChoicesCallback();
+              return;
+            }
+            globalAudioState.value = 'options';
+            let optIdx = 0;
 
-          let aText = '';
-          if (item.answer && item.title) {
-            aText = `正解は、${item.answer}。重要ポイント：${item.point}`;
-          } else {
-            const correctOpt = (item.options && item.options[item.correctIndex]) || '';
-            aText = `正解は、選択肢${item.correctIndex + 1}番、${correctOpt}。正解の論理：${item.explanation}。ここが出題者の引っ掛け罠：${item.trapNote}`;
-          }
+            const nextChoice = () => {
+              if (session !== audioSessionCounter || !isGlobalAudioPlaying.value) return;
+              if (optIdx >= opts.length) {
+                afterChoicesCallback();
+                return;
+              }
+              const currentOptIdx = optIdx;
+              const optText = opts[currentOptIdx];
+              optIdx++;
 
-          speakUtterance(aText, () => {
-            if (!isGlobalAudioPlaying.value) return;
-            // 2秒後に次の設問へ自動進行
+              speakSectionWithTracking(
+                optText,
+                itemId,
+                `option-${currentOptIdx}`,
+                `${currentOptIdx === 0 ? '選択肢。' : ''}${currentOptIdx + 1}番`,
+                session,
+                () => {
+                  nextChoice();
+                }
+              );
+            };
+
+            nextChoice();
+          };
+
+          readChoicesStep(() => {
+            if (session !== audioSessionCounter || !isGlobalAudioPlaying.value) return;
+
+            // Step 3: 思考タイム（3秒カウントダウン）
+            globalAudioState.value = 'thinking';
+            clearReadingTracking();
+            thinkingCountdown.value = 3;
+            readingLiveSubtitle.value = '⏳ 頭の中で正解を思い浮かべてください...';
+
+            thinkingInterval = setInterval(() => {
+              if (thinkingCountdown.value > 1) thinkingCountdown.value--;
+            }, 1000);
+
             globalAudioTimer = setTimeout(() => {
-              if (!isGlobalAudioPlaying.value) return;
-              nextGlobalAudio();
-            }, 2000);
+              clearInterval(thinkingInterval);
+              if (session !== audioSessionCounter || !isGlobalAudioPlaying.value) return;
+
+              // Step 4: 正解発表 ＆ 正解の論理（解説）の読み上げ＆カラオケ追従
+              globalAudioState.value = 'explanation';
+              const correctOpt = (item.options && item.options[item.correctIndex]) || '';
+              const ansPrefix = `正解は、選択肢${item.correctIndex + 1}番、${correctOpt}。正解の論理`;
+
+              speakSectionWithTracking(
+                item.explanation || '',
+                itemId,
+                'explanation',
+                ansPrefix,
+                session,
+                () => {
+                  if (session !== audioSessionCounter || !isGlobalAudioPlaying.value) return;
+
+                  // Step 5: ここが引っ掛け罠！の読み上げ＆カラオケ追従
+                  globalAudioState.value = 'trap';
+                  speakSectionWithTracking(
+                    item.trapNote || '',
+                    itemId,
+                    'trap',
+                    'ここが出題者の引っ掛け罠',
+                    session,
+                    () => {
+                      if (session !== audioSessionCounter || !isGlobalAudioPlaying.value) return;
+                      clearReadingTracking();
+                      readingLiveSubtitle.value = '⏭️ 次の問題へ進みます...';
+                      globalAudioTimer = setTimeout(() => {
+                        if (session === audioSessionCounter && isGlobalAudioPlaying.value) {
+                          nextGlobalAudio();
+                        }
+                      }, 1800);
+                    }
+                  );
+                }
+              );
+            }, 3000);
           });
-        }, 3000);
-      });
+        }
+      );
     };
 
-    const startAudioListening = (playlist, title = '連続聞き流し学習') => {
+    const startAudioListening = (playlist, title = '連続聞き流し学習', sourceMode = 'audio', startIdx = 0) => {
       if (!playlist || playlist.length === 0) {
         alert('再生対象の問題がありません。');
         return;
       }
-      clearTimeout(globalAudioTimer);
-      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+      cancelAllAudioTimers();
+      clearReadingTracking();
 
       globalAudioPlaylist.value = playlist;
       globalAudioTitle.value = title;
-      globalAudioIndex.value = 0;
+      audioSourceMode.value = sourceMode;
+      globalAudioIndex.value = startIdx >= 0 && startIdx < playlist.length ? startIdx : 0;
       isGlobalAudioActive.value = true;
       isGlobalAudioPlaying.value = true;
       runGlobalAudioSequence();
@@ -235,8 +643,8 @@ createApp({
     const toggleGlobalAudioPlay = () => {
       if (isGlobalAudioPlaying.value) {
         isGlobalAudioPlaying.value = false;
-        clearTimeout(globalAudioTimer);
-        if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+        cancelAllAudioTimers();
+        clearReadingTracking();
       } else {
         isGlobalAudioPlaying.value = true;
         runGlobalAudioSequence();
@@ -247,25 +655,31 @@ createApp({
       isGlobalAudioActive.value = false;
       isGlobalAudioPlaying.value = false;
       globalAudioState.value = 'idle';
-      clearTimeout(globalAudioTimer);
-      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+      cancelAllAudioTimers();
+      clearReadingTracking();
     };
 
     const nextGlobalAudio = () => {
-      clearTimeout(globalAudioTimer);
-      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+      cancelAllAudioTimers();
+      clearReadingTracking();
+      if (globalAudioPlaylist.value.length === 0) return;
       globalAudioIndex.value = (globalAudioIndex.value + 1) % globalAudioPlaylist.value.length;
       if (isGlobalAudioPlaying.value) {
         runGlobalAudioSequence();
+      } else {
+        syncScreenWithAudioTrack();
       }
     };
 
     const prevGlobalAudio = () => {
-      clearTimeout(globalAudioTimer);
-      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+      cancelAllAudioTimers();
+      clearReadingTracking();
+      if (globalAudioPlaylist.value.length === 0) return;
       globalAudioIndex.value = (globalAudioIndex.value - 1 + globalAudioPlaylist.value.length) % globalAudioPlaylist.value.length;
       if (isGlobalAudioPlaying.value) {
         runGlobalAudioSequence();
+      } else {
+        syncScreenWithAudioTrack();
       }
     };
 
@@ -276,24 +690,87 @@ createApp({
       }
     };
 
-    // 単発読み上げヘルパー
+    // 単発読み上げヘルパー（単発でもカラオケ式ハイライト追従を実行！）
     const speakSingleQuestion = (q) => {
       if (!q) return;
-      stopGlobalAudio();
-      speakUtterance(`設問、${q.question}`);
+      isGlobalAudioPlaying.value = false;
+      cancelAllAudioTimers();
+      const session = audioSessionCounter;
+      const itemId = q.id !== undefined ? q.id : 'single';
+
+      globalAudioState.value = 'question';
+      speakSectionWithTracking(q.question, itemId, 'question', '設問', session, () => {
+        if (readOptionsInAudio.value && q.options && q.options.length > 0) {
+          let optIdx = 0;
+          const readNextOpt = () => {
+            if (session !== audioSessionCounter) return;
+            if (optIdx >= q.options.length) {
+              clearReadingTracking();
+              globalAudioState.value = 'idle';
+              return;
+            }
+            const cur = optIdx++;
+            speakSectionWithTracking(
+              q.options[cur],
+              itemId,
+              `option-${cur}`,
+              `${cur === 0 ? '選択肢。' : ''}${cur + 1}番`,
+              session,
+              readNextOpt
+            );
+          };
+          readNextOpt();
+        } else {
+          clearReadingTracking();
+          globalAudioState.value = 'idle';
+        }
+      });
     };
 
     const speakSingleExplanation = (q) => {
       if (!q) return;
-      stopGlobalAudio();
+      isGlobalAudioPlaying.value = false;
+      cancelAllAudioTimers();
+      const session = audioSessionCounter;
+      const itemId = q.id !== undefined ? q.id : 'single';
       const correctOpt = (q.options && q.options[q.correctIndex]) || '';
-      const text = `正解は選択肢${q.correctIndex + 1}番、${correctOpt}。正解の論理：${q.explanation}。ここが引っ掛け罠：${q.trapNote}`;
-      speakUtterance(text);
+
+      globalAudioState.value = 'explanation';
+      speakSectionWithTracking(
+        q.explanation || '',
+        itemId,
+        'explanation',
+        `正解は選択肢${q.correctIndex + 1}番、${correctOpt}。正解の論理`,
+        session,
+        () => {
+          if (session !== audioSessionCounter) return;
+          globalAudioState.value = 'trap';
+          speakSectionWithTracking(
+            q.trapNote || '',
+            itemId,
+            'trap',
+            'ここが引っ掛け罠',
+            session,
+            () => {
+              clearReadingTracking();
+              globalAudioState.value = 'idle';
+            }
+          );
+        }
+      );
     };
 
-    const speakText = (text) => {
-      stopGlobalAudio();
-      speakUtterance(text);
+    const speakText = (text, itemId = null, sectionName = 'card-back') => {
+      isGlobalAudioPlaying.value = false;
+      cancelAllAudioTimers();
+      const session = audioSessionCounter;
+      if (itemId !== null) {
+        speakSectionWithTracking(text, itemId, sectionName, '', session, () => {
+          clearReadingTracking();
+        });
+      } else {
+        speakAtomicChunk(text, '', session, () => {});
+      }
     };
 
     // ==========================================
@@ -393,8 +870,15 @@ createApp({
     };
 
     const listenStageQuestions = (idx) => {
-      const list = getStagePool(idx);
-      startAudioListening(list, `STAGE ${idx + 1}: ${stagesList.value[idx].title}`);
+      if (!isStagePlaying.value || currentPlayingStageIdx.value !== idx || stageQuestions.value.length === 0) {
+        openStage(idx);
+      }
+      startAudioListening(
+        stageQuestions.value,
+        `STAGE ${idx + 1}: ${stagesList.value[idx].title}`,
+        'stage',
+        stagePlayQuestionIndex.value
+      );
     };
 
     const listenAllUnlockedStages = () => {
@@ -403,7 +887,7 @@ createApp({
         const pool = allQuestions.value.filter(q => q.chapterId === st.chapterId).slice(0, 10);
         fullList = fullList.concat(pool);
       });
-      startAudioListening(fullList, '解放済みステージ 全問聞き流し');
+      startAudioListening(fullList, '解放済みステージ 全問聞き流し', 'audio', 0);
     };
 
     const handleStageOptionClick = (idx) => {
@@ -466,7 +950,7 @@ createApp({
     const closeStageModal = () => {
       isStagePlaying.value = false;
       isStageFinished.value = false;
-      window.speechSynthesis.cancel();
+      stopGlobalAudio();
     };
 
     const resetStagesProgress = () => {
@@ -479,28 +963,37 @@ createApp({
     };
 
     const getStageOptionClass = (idx) => {
-      const isCorrect = idx === currentStageQuestion.value.correctIndex;
+      const q = currentStageQuestion.value;
+      const isCorrect = idx === q.correctIndex;
       const isChosen = stageSelectedOption.value === idx;
+      const isReadingThisOpt = isSectionReading(q.id, `option-${idx}`);
+      const isRevealedByAudio = isAudioRevealing(q.id);
 
-      // チートモードON時は正解がエメラルド色で事前透視表示
-      if (isGlobalCheatMode.value && !stageAnswered.value && isCorrect) {
-        return 'bg-emerald-950/40 border-emerald-500 text-emerald-200 ring-2 ring-emerald-500/70 font-semibold cursor-pointer';
+      let cls = '';
+      if (isReadingThisOpt) {
+        cls = 'reading-section-active ';
+      }
+
+      if ((isGlobalCheatMode.value || isRevealedByAudio) && !stageAnswered.value && isCorrect) {
+        return cls + 'bg-emerald-950/40 border-emerald-500 text-emerald-200 ring-2 ring-emerald-500/70 font-semibold cursor-pointer';
       }
 
       if (!stageAnswered.value) {
-        return 'bg-slate-950 border-slate-800 hover:border-sky-500 text-slate-200 cursor-pointer';
+        return cls + 'bg-slate-950 border-slate-800 hover:border-sky-500 text-slate-200 cursor-pointer';
       }
 
-      if (isCorrect) return 'bg-emerald-950/40 border-emerald-500 text-emerald-200 font-medium ring-1 ring-emerald-500/50';
-      if (isChosen && !isCorrect) return 'bg-rose-950/40 border-rose-500 text-rose-200 ring-1 ring-rose-500/50';
-      return 'bg-slate-950/40 border-slate-900 text-slate-600 opacity-60';
+      if (isCorrect) return cls + 'bg-emerald-950/40 border-emerald-500 text-emerald-200 font-medium ring-1 ring-emerald-500/50';
+      if (isChosen && !isCorrect) return cls + 'bg-rose-950/40 border-rose-500 text-rose-200 ring-1 ring-rose-500/50';
+      return cls + 'bg-slate-950/40 border-slate-900 text-slate-600 opacity-60';
     };
 
     const getStageBadgeClass = (idx) => {
-      const isCorrect = idx === currentStageQuestion.value.correctIndex;
+      const q = currentStageQuestion.value;
+      const isCorrect = idx === q.correctIndex;
       const isChosen = stageSelectedOption.value === idx;
+      const isRevealedByAudio = isAudioRevealing(q.id);
 
-      if (isGlobalCheatMode.value && !stageAnswered.value && isCorrect) {
+      if ((isGlobalCheatMode.value || isRevealedByAudio) && !stageAnswered.value && isCorrect) {
         return 'border-emerald-500 bg-emerald-500 text-slate-950 font-bold';
       }
 
@@ -548,7 +1041,7 @@ createApp({
     };
 
     const listenAllFlashcards = () => {
-      startAudioListening(flashcards.value, '重要数値・判定基準 フラッシュ暗記');
+      startAudioListening(flashcards.value, '重要数値・判定基準 フラッシュ暗記', 'flashcards', currentCardIndex.value);
     };
 
     // ==========================================
@@ -594,35 +1087,41 @@ createApp({
     };
 
     const listenDrillQuestions = () => {
-      startAudioListening(activeDrillQuestions.value, '分野別特訓 連続聞き流し');
+      startAudioListening(activeDrillQuestions.value, '分野別特訓 連続聞き流し', 'drill', currentDrillIndex.value);
     };
 
     const getDrillOptionClass = (idx) => {
-      const isCorrect = idx === currentDrillQuestion.value.correctIndex;
+      const q = currentDrillQuestion.value;
+      const isCorrect = idx === q.correctIndex;
       const isChosen = drillSelectedOption.value === idx;
+      const isReadingThisOpt = isSectionReading(q.id, `option-${idx}`);
+      const isRevealedByAudio = isAudioRevealing(q.id);
 
-      // チートモード透視
-      if (isGlobalCheatMode.value && !drillAnswered.value && isCorrect) {
-        return 'bg-emerald-950/40 border-emerald-500 text-emerald-200 ring-2 ring-emerald-500/70 font-semibold cursor-pointer';
+      let cls = isReadingThisOpt ? 'reading-section-active ' : '';
+
+      if ((isGlobalCheatMode.value || isRevealedByAudio) && !drillAnswered.value && isCorrect) {
+        return cls + 'bg-emerald-950/40 border-emerald-500 text-emerald-200 ring-2 ring-emerald-500/70 font-semibold cursor-pointer';
       }
 
-      if (!drillAnswered.value) return 'bg-slate-950 border-slate-800 hover:border-sky-500 text-slate-200 cursor-pointer';
-      if (isCorrect) return 'bg-emerald-950/40 border-emerald-500 text-emerald-200 font-medium ring-1 ring-emerald-500/50';
-      if (isChosen && !isCorrect) return 'bg-rose-950/40 border-rose-500 text-rose-200 ring-1 ring-rose-500/50';
-      return 'bg-slate-950/40 border-slate-900 text-slate-600 opacity-60';
+      if (!drillAnswered.value) return cls + 'bg-slate-950 border-slate-800 hover:border-sky-500 text-slate-200 cursor-pointer';
+      if (isCorrect) return cls + 'bg-emerald-950/40 border-emerald-500 text-emerald-200 font-medium ring-1 ring-emerald-500/50';
+      if (isChosen && !isCorrect) return cls + 'bg-rose-950/40 border-rose-500 text-rose-200 ring-1 ring-rose-500/50';
+      return cls + 'bg-slate-950/40 border-slate-900 text-slate-600 opacity-60';
     };
 
     const getDrillBadgeClass = (idx) => {
-      const isCorrect = idx === currentDrillQuestion.value.correctIndex;
+      const q = currentDrillQuestion.value;
+      const isCorrect = idx === q.correctIndex;
       const isChosen = drillSelectedOption.value === idx;
+      const isRevealedByAudio = isAudioRevealing(q.id);
 
-      if (isGlobalCheatMode.value && !drillAnswered.value && isCorrect) {
+      if ((isGlobalCheatMode.value || isRevealedByAudio) && !drillAnswered.value && isCorrect) {
         return 'border-emerald-500 bg-emerald-500 text-slate-950 font-bold';
       }
 
       if (!drillAnswered.value) return 'border-slate-800 bg-slate-900 text-slate-400';
-      if (idx === currentDrillQuestion.value.correctIndex) return 'border-emerald-500 bg-emerald-500 text-slate-950 font-bold';
-      if (drillSelectedOption.value === idx) return 'border-rose-500 bg-rose-500 text-white font-bold';
+      if (isCorrect) return 'border-emerald-500 bg-emerald-500 text-slate-950 font-bold';
+      if (isChosen) return 'border-rose-500 bg-rose-500 text-white font-bold';
       return 'border-slate-900 bg-slate-950 text-slate-700';
     };
 
@@ -711,7 +1210,7 @@ createApp({
       if (examQuestions.value.length === 0) {
         startSpecificExam(selectedExamMode.value);
       }
-      startAudioListening(examQuestions.value, `${getExamModeTitle()} 聞き流し`);
+      startAudioListening(examQuestions.value, `${getExamModeTitle()} 聞き流し`, 'exam', currentExamIndex.value);
     };
 
     const formatExamTime = (seconds) => {
@@ -741,31 +1240,37 @@ createApp({
     };
 
     const getExamOptionClass = (idx) => {
+      const q = currentExamQuestion.value;
       const isAnswered = examUserAnswers.value[currentExamIndex.value] !== null;
       const isChosen = examUserAnswers.value[currentExamIndex.value] === idx;
-      const isCorrect = idx === currentExamQuestion.value.correctIndex;
+      const isCorrect = idx === q.correctIndex;
+      const isReadingThisOpt = isSectionReading(q.id, `option-${idx}`);
+      const isRevealedByAudio = isAudioRevealing(q.id);
 
-      // チートモード透視
-      if (isGlobalCheatMode.value && !isAnswered && isCorrect) {
-        return 'bg-emerald-950/40 border-emerald-500 text-emerald-200 ring-2 ring-emerald-500/70 font-semibold cursor-pointer';
+      let cls = isReadingThisOpt ? 'reading-section-active ' : '';
+
+      if ((isGlobalCheatMode.value || isRevealedByAudio) && !isAnswered && isCorrect) {
+        return cls + 'bg-emerald-950/40 border-emerald-500 text-emerald-200 ring-2 ring-emerald-500/70 font-semibold cursor-pointer';
       }
 
       if (selectedExamMode.value === 'intensive20' && isAnswered) {
-        if (isCorrect) return 'bg-emerald-950/40 border-emerald-500 text-emerald-200 font-medium ring-1 ring-emerald-500/50';
-        if (isChosen && !isCorrect) return 'bg-rose-950/40 border-rose-500 text-rose-200 ring-1 ring-rose-500/50';
-        return 'bg-slate-950/40 border-slate-900 text-slate-600 opacity-60';
+        if (isCorrect) return cls + 'bg-emerald-950/40 border-emerald-500 text-emerald-200 font-medium ring-1 ring-emerald-500/50';
+        if (isChosen && !isCorrect) return cls + 'bg-rose-950/40 border-rose-500 text-rose-200 ring-1 ring-rose-500/50';
+        return cls + 'bg-slate-950/40 border-slate-900 text-slate-600 opacity-60';
       }
 
-      if (isChosen) return 'bg-indigo-950/50 border-indigo-500 text-indigo-100 font-medium ring-1 ring-indigo-500/50';
-      return 'bg-slate-950/80 border-slate-800 text-slate-300 hover:border-slate-700 cursor-pointer';
+      if (isChosen) return cls + 'bg-indigo-950/50 border-indigo-500 text-indigo-100 font-medium ring-1 ring-indigo-500/50';
+      return cls + 'bg-slate-950/80 border-slate-800 text-slate-300 hover:border-slate-700 cursor-pointer';
     };
 
     const getExamBadgeClass = (idx) => {
+      const q = currentExamQuestion.value;
       const isAnswered = examUserAnswers.value[currentExamIndex.value] !== null;
       const isChosen = examUserAnswers.value[currentExamIndex.value] === idx;
-      const isCorrect = idx === currentExamQuestion.value.correctIndex;
+      const isCorrect = idx === q.correctIndex;
+      const isRevealedByAudio = isAudioRevealing(q.id);
 
-      if (isGlobalCheatMode.value && !isAnswered && isCorrect) {
+      if ((isGlobalCheatMode.value || isRevealedByAudio) && !isAnswered && isCorrect) {
         return 'border-emerald-500 bg-emerald-500 text-slate-950 font-bold';
       }
 
@@ -843,7 +1348,7 @@ createApp({
 
     const listenWrongExamQuestions = () => {
       const list = examWrongQuestions.value.map(w => w.q);
-      startAudioListening(list, '模試 誤答・引っ掛け問題 集中聞き流し');
+      startAudioListening(list, '模試 誤答・引っ掛け問題 集中聞き流し', 'audio', 0);
     };
 
     // ==========================================
@@ -877,7 +1382,7 @@ createApp({
     });
 
     const listenCheatSheetQuestions = () => {
-      startAudioListening(filteredCheatSheetQuestions.value.slice(0, 50), '罠チートシート 連続聞き流し');
+      startAudioListening(filteredCheatSheetQuestions.value.slice(0, 50), '罠チートシート 連続聞き流し', 'cheatsheet', 0);
     };
 
     // ==========================================
@@ -904,7 +1409,6 @@ createApp({
     const loadQuestions = async () => {
       try {
         const saved = await getAllFromDB();
-        // 2000問以上あるか確認
         if (saved && saved.length >= 2000) {
           allQuestions.value = saved;
           return;
@@ -968,7 +1472,7 @@ createApp({
       getChapterTotal,
       getChapterProgressPercent,
       toggleBookmark,
-      // グローバル音声聞き流しエンジン
+      // グローバル音声聞き流し＆文章追従エンジン
       isGlobalAudioActive,
       isGlobalAudioPlaying,
       globalAudioSpeed,
@@ -976,6 +1480,16 @@ createApp({
       globalAudioPlaylist,
       globalAudioIndex,
       globalAudioState,
+      readOptionsInAudio,
+      toggleReadOptions,
+      thinkingCountdown,
+      readingItemId,
+      readingSection,
+      readingChunkIndex,
+      readingLiveSubtitle,
+      getTrackedHtml,
+      isSectionReading,
+      isAudioRevealing,
       currentGlobalAudioItem,
       startAudioListening,
       toggleGlobalAudioPlay,
