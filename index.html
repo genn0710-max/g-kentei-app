@@ -52,11 +52,11 @@
           <div class="flex items-center gap-2 flex-wrap">
             <span class="bg-gradient-to-r from-sky-400 to-indigo-500 text-slate-950 font-bold px-2 py-0.5 rounded text-xs tracking-wider">G検定対策</span>
             <h1 class="text-xl md:text-2xl font-bold text-white tracking-tight">G検定 絶対合格プログラム</h1>
-            <span class="text-xs bg-slate-800 text-sky-400 border border-slate-700 px-2.5 py-0.5 rounded-full font-mono">
-              v5.1 完全版 ({{ totalQuestionsCount }}問)
+            <span class="text-xs bg-slate-800 text-sky-400 border border-slate-700 px-2.5 py-0.5 rounded-full font-mono font-bold">
+              v5.3 完全版 ({{ totalQuestionsCount }}問)
             </span>
             <span class="text-[11px] bg-amber-950/80 text-amber-300 border border-amber-600/60 px-2 py-0.5 rounded-full flex items-center gap-1 font-bold">
-              🗣️ 文章追従ハイライト搭載
+              🗣️ 文章追従・日本語発音強化
             </span>
             <span class="text-[11px] bg-emerald-950/80 text-emerald-300 border border-emerald-700/60 px-2 py-0.5 rounded-full flex items-center gap-1 font-medium">
               <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>オフライン対応済
@@ -97,6 +97,12 @@
             <span>📅 試験まで</span>
             <span class="text-sky-400 font-bold font-mono text-sm">{{ countdownDays }}</span>日
           </div>
+
+          <!-- キャッシュクリア＆最新版強制更新ボタン -->
+          <button onclick="window.forceUpdateToLatest && window.forceUpdateToLatest()" class="bg-slate-900 hover:bg-slate-800 border border-slate-700 px-2 py-1 rounded-lg text-[11px] text-sky-400 font-bold flex items-center gap-1" title="スマホ・PCの古いキャッシュを消去して最新版を読み込みます">
+            <span>🔄</span>
+            <span>最新更新</span>
+          </button>
 
           <!-- テーマ切り替え -->
           <button @click="toggleTheme" class="bg-slate-900 hover:bg-slate-800 border border-slate-800 p-1.5 rounded-lg text-xs text-slate-300" title="テーマ切り替え">
@@ -1427,13 +1433,33 @@
 
     <!-- フッター -->
     <footer class="mt-8 pt-4 border-t border-slate-800/80 text-center text-xs text-slate-500">
-      <p>G検定 絶対合格プログラム v5.1 (文章追従ハイライト完全対応) | 2,310問バンク × 全モード聞き流し × 正解＆引っ掛け罠解説 × チート透視 | 完全オフラインPWA</p>
+      <p>G検定 絶対合格プログラム v5.3 (文章追従・日本語発音完全対応) | 2,310問バンク × 全モード聞き流し × 正解＆引っ掛け罠解説 × チート透視 | 完全オフラインPWA</p>
     </footer>
 
   </div>
 
   <script src="app.js?v=5.3"></script>
   <script>
+    window.forceUpdateToLatest = async function() {
+      try {
+        if ('serviceWorker' in navigator) {
+          const regs = await navigator.serviceWorker.getRegistrations();
+          for (const r of regs) {
+            await r.unregister();
+          }
+        }
+        if ('caches' in window) {
+          const keys = await caches.keys();
+          for (const k of keys) {
+            await caches.delete(k);
+          }
+        }
+      } catch (e) {
+        console.warn(e);
+      }
+      window.location.href = './?v=5.3&t=' + Date.now();
+    };
+
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('./service-worker.js?v=5.3')
