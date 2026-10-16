@@ -53,7 +53,7 @@ echo ""
 echo "🚀 GitHubへ送信（プッシュ）中..."
 git remote set-url origin "https://${GITHUB_TOKEN}@github.com/genn0710-max/g-kentei-app.git"
 
-if git push origin main feature/v5.0-complete --tags; then
+if git push origin main; then
   git remote set-url origin "https://github.com/genn0710-max/g-kentei-app.git"
   echo ""
   echo "================================================================"
