@@ -1,4 +1,4 @@
-const CACHE_NAME = 'g-kentei-app-cache-v5.4';
+const CACHE_NAME = 'g-kentei-app-cache-v5.5';
 const STATIC_ASSETS = [
   './',
   './index.html',

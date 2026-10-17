@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-  <title>G検定（ジェネラリスト）絶対合格プログラム【実務者向け 2,310問バンク】</title>
+  <title>G検定（ジェネラリスト）絶対合格プログラム【実務者向け {{ totalQuestionsCount }}問バンク】</title>
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Vue 3 CDN -->
   <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
-  <!-- 2310問問題バンク & 183枚重要数値・用語暗記データ -->
+  <!-- {{ totalQuestionsCount }}問問題バンク & 183枚重要数値・用語暗記データ -->
   <script src="questions_bank.js?v=5.4"></script>
   <script src="flashcards_data.js?v=5.4"></script>
   <!-- スタイルシート -->
@@ -1104,7 +1104,7 @@
               }" class="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1 text-xs text-slate-200 focus:outline-none focus:border-sky-500">
                 <option value="stages">🎯 段階ステップ特訓（180問）</option>
                 <option value="flashcards">🔢 重要数値・用語暗記カード（183枚）</option>
-                <option value="all">🌟 全2,310問から150問通し</option>
+                <option value="all">🌟 全{{ totalQuestionsCount }}問から150問通し</option>
               </select>
 
               <button @click="toggleReadOptions" class="px-2.5 py-1 rounded-lg border text-xs font-bold transition-all" :class="readOptionsInAudio ? 'bg-sky-950 text-sky-300 border-sky-700' : 'bg-slate-950 text-slate-400 border-slate-800'">
@@ -1239,7 +1239,7 @@
 
 
       <!-- ============================================== -->
-      <!-- TAB 7: 🚨 罠チートシート (全2,310問対応) -->
+      <!-- TAB 7: 🚨 罠チートシート (全{{ totalQuestionsCount }}問対応) -->
       <!-- ============================================== -->
       <section v-if="activeTab === 'cheatsheet'" class="space-y-4">
         
@@ -1350,7 +1350,7 @@
               <span>⬇️</span> 全問題をJSONでダウンロード (バックアップ)
             </button>
             <button @click="resetToFactoryPool" class="bg-rose-950 hover:bg-rose-900 text-rose-300 border border-rose-800 text-xs px-4 py-2 rounded-xl font-bold">
-              ⚠️ 初期問題プール（2,310問）にリセット
+              ⚠️ 初期問題プール（{{ totalQuestionsCount }}問）にリセット
             </button>
           </div>
         </div>
@@ -1465,7 +1465,7 @@
         navigator.serviceWorker.register('./service-worker.js?v=5.4')
           .then((reg) => {
             reg.update();
-            console.log('[PWA v5.4] Service Worker registered successfully!', reg.scope);
+            console.log('[PWA v5.5] Service Worker registered successfully!', reg.scope);
           })
           .catch((err) => {
             console.warn('[PWA] Service Worker registration failed:', err);

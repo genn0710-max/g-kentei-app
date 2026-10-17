@@ -1,7 +1,7 @@
 const { createApp, ref, computed, onMounted, onUnmounted, watch, nextTick } = Vue;
 
-const APP_VERSION = 'v5.4';
-const DB_NAME = 'GKenteiQuestionDB_v2';
+const APP_VERSION = 'v5.5';
+const DB_NAME = 'GKenteiQuestionDB_v3';
 const DB_VERSION = 1;
 const STORE_NAME = 'questions';
 
@@ -1925,24 +1925,24 @@ createApp({
     const stagesList = computed(() => {
       const list = [];
       const stageDefs = [
-        { title: 'AIの歴史①（ダートマス会議・チューリングテスト）', ch: 'ch1', desc: '第1次AIブームの誕生とチューリングテストの基礎定義' },
-        { title: 'AIの歴史②（探索・推論・トイプロブレム）', ch: 'ch1', desc: '探索木・ハノイの塔・おもちゃの問題の限界' },
-        { title: 'AIの歴史③（エキスパートシステム・第2次ブーム）', ch: 'ch1', desc: 'MYCIN、DENDRAL、知識獲得のボトルネック' },
-        { title: '知能をめぐる課題①（フレーム問題）', ch: 'ch2', desc: 'マッカーシーとデネットの思考実験、無限の関連事象' },
-        { title: '知能をめぐる課題②（記号接地問題・中国語の部屋）', ch: 'ch2', desc: 'ハルナッドのシンボルグラウンディングとサールの批判' },
-        { title: '機械学習の基本①（教師あり・なし・強化学習）', ch: 'ch3', desc: '学習パラダイムの分類と代表的タスク' },
-        { title: '機械学習の基本②（SVM・マージン・カーネル法）', ch: 'ch3', desc: '最大マージン超平面とカーネルトリックの計算' },
-        { title: '機械学習の基本③（決定木・ランダムフォレスト）', ch: 'ch3', desc: '情報利得、ジニ係数、アンサンブル学習（バギング）' },
-        { title: '機械学習の基本④（ブースティング・GBDT）', ch: 'ch3', desc: '残差学習、XGBoost、LightGBM、バイアス低減' },
-        { title: '正則化と過学習（L1 vs L2正則化）', ch: 'ch3', desc: 'Lassoのスパース化 vs Ridgeの重み滑らか縮小' },
-        { title: 'ディープラーニング要素技術①（活性化関数）', ch: 'ch4', desc: 'Sigmoid導関数最大0.25、ReLU、Leaky ReLU' },
-        { title: 'ディープラーニング要素技術②（最適化手法）', ch: 'ch4', desc: 'Momentum、AdaGrad、RMSprop、Adam' },
-        { title: 'ディープラーニング要素技術③（ドロップアウト・BN）', ch: 'ch4', desc: '推論時と学習時の挙動違い、移動平均' },
-        { title: '画像認識・CNN①（畳み込み・プーリング）', ch: 'ch5', desc: '重み共有、受容野、プーリング層の重みゼロ' },
-        { title: '画像認識・CNN②（ResNet・物体検出）', ch: 'ch5', desc: 'スキップ結合、IoU、NMS、YOLO vs Faster R-CNN' },
-        { title: '自然言語処理・Transformer（Self-Attention）', ch: 'ch6', desc: 'Q, K, V行列、Positional Encoding、並列学習' },
-        { title: '生成AI・LLM（RAG・LoRA・RLHF）', ch: 'ch7', desc: '事実知識注入vsスタイル適応、低ランク分解、アライメント' },
-        { title: 'AI倫理・法規制（著作権30条の4・EU AI Act）', ch: 'ch8', desc: '享受を目的としない利用、AI事業者G/L、リスク4分類' }
+        { title: 'AIの歴史①（ダートマス会議・第1次ブーム・探索と推論）', ch: 'ch1', desc: 'ダートマス会議、探索木、トイプロブレム、イライザ等の基礎' },
+        { title: 'AIの歴史②（エキスパートシステム・第2次＆第3次ブーム）', ch: 'ch1', desc: 'MYCIN、DENDRAL、知識獲得のボトルネック、統計的機械学習' },
+        { title: '知能をめぐる課題①（フレーム問題・記号接地・中国語の部屋）', ch: 'ch2', desc: 'マッカーシー、ハルナッド、サールの強いAIと弱いAI' },
+        { title: '知能をめぐる課題②（チューリングテスト・シンギュラリティ・AI効果）', ch: 'ch2', desc: 'モラベックのパラドックス、ノーフリーランチ定理、AI定義' },
+        { title: '機械学習の基本①（教師あり・教師なし・評価指標・ROC/AUC）', ch: 'ch3', desc: '混同行列、適合率・再現率・F1、マクロ平均、データリーケージ' },
+        { title: '機械学習の基本②（回帰・分類・SVM・k-NN・ロジスティック回帰）', ch: 'ch3', desc: 'サポートベクトル、カーネルトリック、決定境界、多重共線性' },
+        { title: '機械学習の基本③（決定木・ランダムフォレスト・GBDT・アンサンブル）', ch: 'ch3', desc: 'バギング、ブースティング、スタッキング、XGBoost・LightGBM' },
+        { title: '機械学習の基本④（正則化・交差検証・次元削減・クラスタリング）', ch: 'ch3', desc: 'L1(Lasso)/L2(Ridge)、k分割交差検証、PCA、k-means++、t-SNE' },
+        { title: '機械学習の基本⑤（強化学習・マルコフ決定過程・Q学習・方策勾配）', ch: 'ch3', desc: '探索と利用、ε-greedy、ベルマン方程式、Actor-Critic、AlphaGo' },
+        { title: 'ディープラーニング要素技術①（パーセプトロン・誤差逆伝播・活性化関数）', ch: 'ch4', desc: 'XOR問題、Sigmoid最大導関数0.25、ReLU、GELU、Swish、温度付きSoftmax' },
+        { title: 'ディープラーニング要素技術②（最適化手法・SGD・Momentum・Adam）', ch: 'ch4', desc: '鞍点、AdaGrad、RMSprop、Adam、重み減衰(AdamW)、Cosine Annealing' },
+        { title: 'ディープラーニング要素技術③（正規化・ドロップアウト・重み初期化）', ch: 'ch4', desc: 'Batch Norm vs Layer Norm、Inverted Dropout、Xavier初期化 vs He初期化' },
+        { title: '画像認識・CNN①（畳み込み層・プーリング層・受容野・出力サイズ計算）', ch: 'ch5', desc: '局所受容野、重み共有、平行移動不変性、GAP、Depthwise Separable Conv' },
+        { title: '画像認識・CNN②（AlexNet〜ResNet・物体検出YOLO・セグメンテーション）', ch: 'ch5', desc: 'スキップ結合、Faster R-CNN vs YOLO、FPN、U-Net、転移学習' },
+        { title: '自然言語処理・音声①（形態素解析・BoW・TF-IDF・Word2Vec・RNN/LSTM）', ch: 'ch6', desc: 'CBOW vs Skip-gram、BPTT、LSTMの3ゲートとセル状態、Seq2Seq' },
+        { title: '自然言語処理・音声②（Attention・Transformer・BERT・GPT・ViT）', ch: 'ch6', desc: 'Scaled Dot-Product Attention、Masked Self-Attention、MLM、BPE、CTC' },
+        { title: '生成AI・マルチモーダル（VAE・GAN・拡散モデル・CLIP・RAG・RLHF・LoRA）', ch: 'ch7', desc: 'Reparameterization Trick、モード崩壊、DDPM、PEFT/LoRA、DPO、蒸留' },
+        { title: 'AI社会実装・法律・倫理（著作権法30条の4・個人情報保護・EU AI Act・XAI）', ch: 'ch8', desc: '享受目的、匿名/仮名加工、営業秘密3要件、特許、SHAP/LIME、MLOps' }
       ];
 
       for (let i = 0; i < 18; i++) {
@@ -1984,17 +1984,18 @@ createApp({
       return stageQuestions.value[stagePlayQuestionIndex.value] || {};
     });
 
+    // 各ステージ専用に割り当てられた10問（全18ステージ×10問＝180問が完全重複なしで対応）を取得
     const getStagePool = (idx) => {
-      const st = stagesList.value[idx];
-      const pool = allQuestions.value.filter(q => q.chapterId === st.chapterId);
-      let selected = [...pool].sort(() => 0.5 - Math.random()).slice(0, 10);
-      if (stageRelationReview.value && stageMistakePool.value.length > 0 && selected.length >= 2) {
-        const reviewQ = stageMistakePool.value[Math.floor(Math.random() * stageMistakePool.value.length)];
-        if (reviewQ && !selected.some(q => q.id === reviewQ.id)) {
-          selected[0] = reviewQ;
-        }
+      const dedicated = allQuestions.value
+        .filter(q => q.stageId === idx)
+        .sort((a, b) => (a.stageOrder ?? 0) - (b.stageOrder ?? 0));
+      if (dedicated.length >= 10) {
+        return dedicated.slice(0, 10);
       }
-      return selected;
+      const st = stagesList.value[idx];
+      const usedIds = new Set(dedicated.map(q => q.id));
+      const fallback = allQuestions.value.filter(q => q.chapterId === st.chapterId && !usedIds.has(q.id));
+      return [...dedicated, ...fallback].slice(0, 10);
     };
 
     const openStage = (idx) => {
@@ -2025,9 +2026,15 @@ createApp({
 
     const listenAllUnlockedStages = () => {
       let fullList = [];
+      const seenIds = new Set();
       stagesList.value.filter(s => s.unlocked).forEach(st => {
-        const pool = allQuestions.value.filter(q => q.chapterId === st.chapterId).slice(0, 10);
-        fullList = fullList.concat(pool);
+        const pool = getStagePool(st.id);
+        pool.forEach(q => {
+          if (!seenIds.has(q.id)) {
+            seenIds.add(q.id);
+            fullList.push(q);
+          }
+        });
       });
       startAudioListening(fullList, '解放済みステージ 全問聞き流し', 'audio', 0);
     };
@@ -2300,29 +2307,48 @@ createApp({
 
       let targetCount = 150;
       let durationSeconds = 6000;
-      let ratioMap = { ch1: 10, ch2: 12, ch3: 38, ch4: 45, ch5: 13, ch6: 12, ch7: 10, ch8: 10 };
+      let ratioMap = { ch1: 14, ch2: 14, ch3: 42, ch4: 22, ch5: 15, ch6: 14, ch7: 10, ch8: 19 };
 
       if (mode === 'speed10') {
         targetCount = 15;
         durationSeconds = 600;
-        ratioMap = { ch1: 1, ch2: 1, ch3: 4, ch4: 4, ch5: 2, ch6: 1, ch7: 1, ch8: 1 };
+        ratioMap = { ch1: 1, ch2: 1, ch3: 4, ch4: 3, ch5: 2, ch6: 1, ch7: 1, ch8: 2 };
       } else if (mode === 'intensive20') {
         targetCount = 25;
         durationSeconds = 1200;
-        ratioMap = { ch1: 2, ch2: 2, ch3: 6, ch4: 7, ch5: 3, ch6: 2, ch7: 2, ch8: 1 };
+        ratioMap = { ch1: 2, ch2: 2, ch3: 6, ch4: 5, ch5: 3, ch6: 2, ch7: 2, ch8: 3 };
       }
 
       let selected = [];
+      const selectedIds = new Set();
+      const selectedStems = new Set();
+
       for (const [chId, count] of Object.entries(ratioMap)) {
-        const pool = allQuestions.value.filter(q => q.chapterId === chId);
+        const pool = allQuestions.value.filter(q => q.chapterId === chId && !selectedIds.has(q.id));
         const shuffled = [...pool].sort(() => 0.5 - Math.random());
-        selected = selected.concat(shuffled.slice(0, count));
+        for (const q of shuffled) {
+          if (selected.filter(item => item.chapterId === chId).length >= count) break;
+          const stemKey = (q.question || '').trim();
+          if (!selectedIds.has(q.id) && !selectedStems.has(stemKey)) {
+            selectedIds.add(q.id);
+            selectedStems.add(stemKey);
+            selected.push(q);
+          }
+        }
       }
 
       if (selected.length < targetCount) {
-        const remainingPool = allQuestions.value.filter(q => !selected.includes(q));
-        const extra = [...remainingPool].sort(() => 0.5 - Math.random()).slice(0, targetCount - selected.length);
-        selected = selected.concat(extra);
+        const remainingPool = allQuestions.value.filter(q => !selectedIds.has(q.id) && !selectedStems.has((q.question || '').trim()));
+        const extra = [...remainingPool].sort(() => 0.5 - Math.random());
+        for (const q of extra) {
+          if (selected.length >= targetCount) break;
+          const stemKey = (q.question || '').trim();
+          if (!selectedIds.has(q.id) && !selectedStems.has(stemKey)) {
+            selectedIds.add(q.id);
+            selectedStems.add(stemKey);
+            selected.push(q);
+          }
+        }
       }
 
       examQuestions.value = selected.slice(0, targetCount).sort(() => 0.5 - Math.random());
@@ -2536,7 +2562,7 @@ createApp({
 
     const getChapterProgressPercent = (chId) => {
       const total = getChapterTotal(chId);
-      return Math.min(100, Math.round((total / 400) * 100));
+      return Math.min(100, Math.round((total / 60) * 100));
     };
 
     const toggleBookmark = async (q) => {
@@ -2546,7 +2572,7 @@ createApp({
     };
 
     // ==========================================
-    // データ初期化・ロード (IndexedDB)
+    // データ初期化・ロード (IndexedDB) — 重複ゼロ保証
     // ==========================================
     const loadQuestions = async () => {
       let savedMap = new Map();
@@ -2558,7 +2584,7 @@ createApp({
           for (const item of saved) {
             if (bankIds.has(item.id)) {
               savedMap.set(item.id, item);
-            } else {
+            } else if (String(item.id || '').startsWith('custom-')) {
               customQuestions.push(item);
             }
           }
@@ -2578,7 +2604,21 @@ createApp({
             lastAnswered: prev.lastAnswered || null
           };
         });
-        allQuestions.value = [...customQuestions, ...merged];
+
+        // 問題文およびIDの完全重複排除フィルター
+        const seenIds = new Set();
+        const seenStems = new Set();
+        const deduplicated = [];
+        for (const item of [...merged, ...customQuestions]) {
+          const stemKey = (item.question || '').trim();
+          if (!seenIds.has(item.id) && !seenStems.has(stemKey)) {
+            seenIds.add(item.id);
+            seenStems.add(stemKey);
+            deduplicated.push(item);
+          }
+        }
+
+        allQuestions.value = deduplicated;
         try {
           await saveAllToDB(allQuestions.value);
         } catch (err) {
@@ -2588,7 +2628,7 @@ createApp({
     };
 
     const resetToFactoryPool = async () => {
-      if (!confirm('初期の全問題プール（2,310問）にリセットしますか？')) return;
+      if (!confirm(`初期の全問題プール（重複なし厳選${(window.QUESTIONS_BANK || []).length}問）にリセットしますか？`)) return;
       if (window.QUESTIONS_BANK) {
         allQuestions.value = window.QUESTIONS_BANK;
         await saveAllToDB(window.QUESTIONS_BANK);
@@ -2614,7 +2654,7 @@ createApp({
       nextTick(() => {
         const badgeEl = document.getElementById('app-version-badge') || document.querySelector('header span.font-mono.font-bold');
         if (badgeEl) {
-          badgeEl.textContent = `${ver} 完全版 (${totalQuestionsCount.value || 2310}問)`;
+          badgeEl.textContent = `${ver} 完全版 (${totalQuestionsCount.value || (window.QUESTIONS_BANK ? window.QUESTIONS_BANK.length : 212)}問・重複ゼロ)`;
         }
         const footerEl = document.getElementById('app-version-footer') || document.querySelector('footer p');
         if (footerEl && footerEl.textContent) {
