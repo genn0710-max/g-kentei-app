@@ -1,5 +1,6 @@
 const { createApp, ref, computed, onMounted, onUnmounted, watch, nextTick } = Vue;
 
+const APP_VERSION = 'v5.4';
 const DB_NAME = 'GKenteiQuestionDB_v2';
 const DB_VERSION = 1;
 const STORE_NAME = 'questions';
@@ -2605,8 +2606,50 @@ createApp({
       downloadAnchor.remove();
     };
 
+    const appVersion = ref(APP_VERSION);
+
+    // 画面上のバージョン表記を常に最新バージョンへ同期（古いHTMLキャッシュが残っている場合でも即座に書き換え）
+    const syncVersionDisplay = (ver) => {
+      appVersion.value = ver;
+      nextTick(() => {
+        const badgeEl = document.getElementById('app-version-badge') || document.querySelector('header span.font-mono.font-bold');
+        if (badgeEl) {
+          badgeEl.textContent = `${ver} 完全版 (${totalQuestionsCount.value || 2310}問)`;
+        }
+        const footerEl = document.getElementById('app-version-footer') || document.querySelector('footer p');
+        if (footerEl && footerEl.textContent) {
+          footerEl.textContent = footerEl.textContent.replace(/v\d+\.\d+(?:\.\d+)?/, ver);
+        }
+      });
+    };
+
+    // サーバー上の最新バージョンを自動検知し、古いキャッシュがあれば自動更新して追従
+    const checkLatestVersionAndFollow = async () => {
+      try {
+        const res = await fetch('./app.js?t=' + Date.now(), { cache: 'no-store' });
+        if (res.ok) {
+          const text = await res.text();
+          const match = text.match(/const\s+APP_VERSION\s*=\s*['"]([^'"]+)['"]/);
+          if (match && match[1]) {
+            const latestVer = match[1];
+            syncVersionDisplay(latestVer);
+            if (latestVer !== APP_VERSION && sessionStorage.getItem('gkentei_reloaded_ver') !== latestVer) {
+              sessionStorage.setItem('gkentei_reloaded_ver', latestVer);
+              if (window.forceUpdateToLatest) {
+                window.forceUpdateToLatest();
+              }
+            }
+          }
+        }
+      } catch (e) {
+        // オフライン時は現在のバージョンを維持
+      }
+    };
+
     onMounted(async () => {
       await loadQuestions();
+      syncVersionDisplay(appVersion.value);
+      checkLatestVersionAndFollow();
     });
 
     onUnmounted(() => {
@@ -2616,6 +2659,7 @@ createApp({
 
     return {
       // 共通・UI
+      appVersion,
       fontSizeClass,
       setFontSize,
       themeClass,

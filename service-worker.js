@@ -51,12 +51,15 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Network-First strategy (with offline cache fallback) so updates always reflect immediately
+// Network-First strategy (with no-cache validation for same-origin assets & offline cache fallback)
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
+  const isSameOrigin = event.request.url.startsWith(self.location.origin);
+  const fetchOptions = isSameOrigin ? { cache: 'no-cache' } : {};
+
   event.respondWith(
-    fetch(event.request)
+    fetch(event.request, fetchOptions)
       .then((networkResponse) => {
         if (networkResponse && networkResponse.status === 200 && networkResponse.type !== 'opaque') {
           const responseToCache = networkResponse.clone();
